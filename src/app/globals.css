@@ -10,3 +10,15 @@ body {
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+@keyframes scanline {
+  0%   { top: 8%; }
+  50%  { top: 92%; }
+  100% { top: 8%; }
+}
+
+/* html5-qrcode 가 주입하는 내부 UI 요소 제거 */
+#qr-preview > img,
+#qr-preview #qr-shaded-region {
+  display: none;
+}

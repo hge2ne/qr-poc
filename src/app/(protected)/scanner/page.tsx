@@ -34,82 +34,85 @@ export default function ScannerPage() {
 
       if (!res.success) {
         setResult({ success: false, error: res.error });
-        return;
+      } else {
+        setResult({ success: true, ...res.data });
       }
-      setResult({ success: true, ...res.data });
 
-      // 3초 후 다음 스캔을 위해 마지막 토큰 초기화
       setTimeout(() => setLastToken(""), 3000);
     },
     [lastToken]
   );
 
   return (
-    <div>
+    <div className="max-w-4xl">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">QR 스캐너</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="font-semibold text-gray-900 mb-4">카메라 스캔</h2>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-5 items-start">
+        {/* 카메라 프리뷰 */}
+        <div>
           <QRScanner onScan={handleScan} />
         </div>
 
-        <div>
+        {/* 스캔 결과 */}
+        <div className="flex flex-col gap-3">
+          {/* 처리 중 */}
           {processing && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-              <div className="text-4xl mb-3">⏳</div>
-              <p className="text-blue-600 font-medium">처리 중...</p>
+            <div className="border border-blue-200 bg-blue-50 rounded-xl p-8 text-center">
+              <div className="w-10 h-10 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-blue-600 font-medium text-sm">인증 처리 중...</p>
             </div>
           )}
 
+          {/* 대기 상태 */}
           {!processing && !result && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center text-gray-400">
-              <div className="text-4xl mb-3">📷</div>
-              <p>QR 코드를 스캔하면</p>
-              <p>여기에 결과가 표시됩니다</p>
+            <div className="border border-dashed border-gray-300 rounded-xl p-10 text-center text-gray-400">
+              <div className="text-5xl mb-3 opacity-40">🎫</div>
+              <p className="text-sm">QR 코드를 스캔하면</p>
+              <p className="text-sm">결과가 여기에 표시됩니다</p>
             </div>
           )}
 
+          {/* 결과 카드 */}
           {!processing && result && (
-            <div
-              className={`border rounded-xl p-8 text-center ${
-                !result.success
-                  ? "bg-red-50 border-red-200"
-                  : result.alreadyEntered
-                  ? "bg-yellow-50 border-yellow-200"
-                  : "bg-green-50 border-green-200"
-              }`}
-            >
-              {!result.success ? (
-                <>
+            <>
+              {!result.success && (
+                <div className="border border-red-200 bg-red-50 rounded-xl p-6 text-center">
                   <div className="text-5xl mb-3">❌</div>
-                  <p className="text-red-600 font-semibold text-lg mb-1">인식 실패</p>
-                  <p className="text-red-500 text-sm">{result.error}</p>
-                </>
-              ) : result.alreadyEntered ? (
-                <>
+                  <p className="text-red-600 font-semibold mb-1">인식 실패</p>
+                  <p className="text-red-400 text-sm">{result.error}</p>
+                </div>
+              )}
+
+              {result.success && result.alreadyEntered && (
+                <div className="border border-yellow-200 bg-yellow-50 rounded-xl p-6 text-center">
                   <div className="text-5xl mb-3">⚠️</div>
-                  <p className="text-yellow-700 font-semibold text-lg mb-3">이미 입장한 QR</p>
+                  <p className="text-yellow-700 font-semibold mb-3">이미 입장한 QR</p>
                   <p className="text-gray-900 font-bold text-xl">{result.attendeeName}</p>
                   <p className="text-gray-500 text-sm mt-1">{result.phone}</p>
-                  <p className="text-gray-500 text-sm">{result.eventTitle}</p>
-                  <p className="text-yellow-600 text-xs mt-2">
-                    최초 입장: {result.enteredAt && new Date(result.enteredAt).toLocaleString("ko-KR")}
-                  </p>
-                </>
-              ) : (
-                <>
+                  <p className="text-gray-400 text-sm">{result.eventTitle}</p>
+                  <div className="mt-3 bg-yellow-100 rounded-lg px-3 py-1.5">
+                    <p className="text-yellow-700 text-xs">
+                      최초 입장: {result.enteredAt && new Date(result.enteredAt).toLocaleString("ko-KR")}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {result.success && !result.alreadyEntered && (
+                <div className="border border-green-200 bg-green-50 rounded-xl p-6 text-center">
                   <div className="text-5xl mb-3">✅</div>
-                  <p className="text-green-700 font-semibold text-lg mb-3">입장 완료</p>
+                  <p className="text-green-700 font-semibold mb-3">입장 완료</p>
                   <p className="text-gray-900 font-bold text-2xl">{result.attendeeName}</p>
                   <p className="text-gray-500 text-sm mt-1">{result.phone}</p>
-                  <p className="text-gray-500 text-sm">{result.eventTitle}</p>
-                  <p className="text-green-600 text-xs mt-2">
-                    {result.enteredAt && new Date(result.enteredAt).toLocaleString("ko-KR")}
-                  </p>
-                </>
+                  <p className="text-gray-400 text-sm">{result.eventTitle}</p>
+                  <div className="mt-3 bg-green-100 rounded-lg px-3 py-1.5">
+                    <p className="text-green-700 text-xs">
+                      {result.enteredAt && new Date(result.enteredAt).toLocaleString("ko-KR")}
+                    </p>
+                  </div>
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>
