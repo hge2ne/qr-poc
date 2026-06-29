@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  PARENT
+}
+
+enum AttendeeStatus {
+  PENDING
+  ENTERED
+}
+
+model User {
+  id        String     @id @default(cuid())
+  name      String
+  email     String     @unique
+  password  String
+  role      Role       @default(PARENT)
+  createdAt DateTime   @default(now())
+  attendees Attendee[]
+}
+
+model Event {
+  id          String     @id @default(cuid())
+  title       String
+  date        DateTime
+  location    String
+  description String?
+  createdAt   DateTime   @default(now())
+  attendees   Attendee[]
+}
+
+model Attendee {
+  id        String         @id @default(cuid())
+  name      String
+  phone     String
+  eventId   String
+  userId    String?
+  qrToken   String         @unique @default(cuid())
+  status    AttendeeStatus @default(PENDING)
+  enteredAt DateTime?
+  createdAt DateTime       @default(now())
+  event     Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User?          @relation(fields: [userId], references: [id])
+}
