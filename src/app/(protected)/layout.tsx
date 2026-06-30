@@ -1,5 +1,5 @@
-import { logout } from "@/actions/auth";
 import { getSession } from "@/lib/session";
+import { LogoutButton } from "./LogoutButton";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -42,11 +42,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
             >
               {session.role === "ADMIN" ? "관리자" : "학부모"}
             </span>
-            <form action={logout}>
-              <button type="submit" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
-                로그아웃
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
       </nav>
