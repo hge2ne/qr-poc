@@ -37,12 +37,12 @@ export default function LoginPage() {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">이메일</label>
+            <label className="block text-sm font-medium text-foreground mb-1">아이디 또는 이메일</label>
             <input
               name="email"
-              type="email"
+              type="text"
               required
-              autoComplete="email"
+              autoComplete="username"
               className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
             />
           </div>

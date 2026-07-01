@@ -7,7 +7,11 @@
     "build": "prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
+    "seed": "node prisma/seed.mjs",
     "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-kr": "^5.2.9",
