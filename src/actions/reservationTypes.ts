@@ -47,6 +47,7 @@ export type StoredReservation = {
   school?: string;
   grade?: string;
   attendeeCount?: number;
+  qrUrl?: string;
   status: ReservationStatus;
   createdAt: string;
   cancelledAt?: string;

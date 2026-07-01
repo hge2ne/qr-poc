@@ -9,6 +9,7 @@ import {
 } from "@/actions/reservations";
 import type { StoredReservation } from "@/actions/reservationTypes";
 import { Logo } from "@/components/Logo";
+import { QRCodeDisplay } from "@/components/QRCodeDisplay";
 
 function formatDate(iso: string) {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("ko-KR", {
@@ -35,6 +36,7 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [expandedReservationId, setExpandedReservationId] = useState<string | null>(null);
 
   async function searchReservations(nextName = name, nextPhone = phone) {
     setLoading(true);
@@ -47,6 +49,7 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
     }
     const found = result.data ?? [];
     setResults(found);
+    setExpandedReservationId(null);
     setMessage(found.length ? "" : "조회된 예약이 없습니다.");
   }
 
@@ -172,6 +175,12 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
                 reservation={reservation}
                 onCancel={handleCancel}
                 cancelling={cancelling}
+                expanded={expandedReservationId === reservation.id}
+                onToggle={() =>
+                  setExpandedReservationId((current) =>
+                    current === reservation.id ? null : reservation.id,
+                  )
+                }
               />
             ))}
           </div>
@@ -202,17 +211,28 @@ function ReservationCard({
   reservation,
   onCancel,
   cancelling,
+  expanded,
+  onToggle,
 }: {
   reservation: StoredReservation;
   onCancel: (id: string) => void;
   cancelling: boolean;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
   const isCancelled = reservation.status === "cancelled";
   const hasSeparatedSchoolGrade = Boolean(reservation.school || reservation.grade);
+  const canShowQr = !isCancelled && Boolean(reservation.qrUrl);
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label={`${reservation.session.title} 입장 QR ${expanded ? "접기" : "보기"}`}
+        className="mb-3 flex w-full items-start justify-between gap-3 rounded-lg text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+      >
         <div>
           <p className="text-xs font-medium text-primary/90">
             {reservation.session.campus ?? "송파캠퍼스"}
@@ -230,7 +250,7 @@ function ReservationCard({
         >
           {isCancelled ? "취소 요청 완료" : "예약 완료"}
         </span>
-      </div>
+      </button>
 
       <div className="space-y-2">
         <SummaryRow
@@ -262,6 +282,47 @@ function ReservationCard({
           <SummaryRow label="취소 요청일" value={formatDateTime(reservation.cancelledAt)} />
         )}
       </div>
+
+      {!isCancelled && (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className={`mt-4 w-full rounded-lg py-3 text-sm font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring ${
+            expanded
+              ? "border border-input bg-card text-foreground hover:bg-muted"
+              : "bg-primary text-white hover:bg-primary/90"
+          }`}
+        >
+          {expanded ? "입장 QR 접기" : "입장 QR 보기"}
+        </button>
+      )}
+
+      {expanded && (
+        <div className="mt-4 border-t border-muted pt-4 text-center">
+          {canShowQr && reservation.qrUrl ? (
+            <>
+              <h4 className="text-sm font-semibold text-foreground">입장 QR</h4>
+              <p className="mt-1 text-xs text-muted-foreground">
+                설명회 당일 현장에서 아래 QR 또는 URL을 제시해 주세요.
+              </p>
+              <div className="mt-4">
+                <QRCodeDisplay
+                  value={reservation.qrUrl}
+                  size={180}
+                  downloadName={`${reservation.name}_${reservation.session.title}_QR`}
+                />
+              </div>
+            </>
+          ) : (
+            <p className="rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground">
+              {isCancelled
+                ? "취소 요청된 예약은 QR을 사용할 수 없습니다."
+                : "QR 정보를 불러올 수 없습니다. 예약 조회를 다시 시도해 주세요."}
+            </p>
+          )}
+        </div>
+      )}
 
       {isCancelled ? (
         <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-center text-xs font-medium text-muted-foreground">

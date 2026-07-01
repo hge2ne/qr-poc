@@ -30,6 +30,11 @@ type EventWithCounts = {
 
 const DEFAULT_ROUND = "신규 회차";
 
+function buildQrUrl(qrToken: string): string {
+  const base = process.env.BASE_URL || "http://localhost:3000";
+  return `${base}/verify/${qrToken}`;
+}
+
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "");
 }
@@ -112,6 +117,7 @@ function toStoredReservation(
       round: string | null;
       location: string;
     };
+    attendee?: { qrToken: string } | null;
   }
 ): StoredReservation {
   const { date, time } = getDateParts(reservation.event.date);
@@ -134,6 +140,7 @@ function toStoredReservation(
     school: reservation.school,
     grade: reservation.grade,
     attendeeCount: reservation.attendeeCount,
+    qrUrl: reservation.attendee ? buildQrUrl(reservation.attendee.qrToken) : undefined,
     status: reservation.status === "RESERVED" ? "reserved" : "cancelled",
     createdAt: reservation.createdAt.toISOString(),
     cancelledAt: reservation.cancelledAt?.toISOString(),
@@ -302,7 +309,7 @@ export async function createReservation(
       include: { event: true },
     });
 
-    await tx.attendee.create({
+    const attendee = await tx.attendee.create({
       data: {
         eventId,
         reservationId: reservation.id,
@@ -321,7 +328,7 @@ export async function createReservation(
     return {
       success: true,
       data: {
-        reservation: toStoredReservation(reservation),
+        reservation: toStoredReservation({ ...reservation, attendee }),
         session,
       },
     };
@@ -341,7 +348,12 @@ export async function findReservationsByContact(data: {
 
   const reservations = await prisma.reservation.findMany({
     where: { phoneNormalized },
-    include: { event: true },
+    include: {
+      event: true,
+      attendee: {
+        select: { qrToken: true },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 

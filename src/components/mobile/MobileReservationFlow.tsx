@@ -10,6 +10,7 @@ import type {
 } from "@/actions/reservationTypes";
 import type { ActionResult } from "@/actions/types";
 import { Logo } from "@/components/Logo";
+import { QRCodeDisplay } from "@/components/QRCodeDisplay";
 import {
   CAMPUSES,
   DEFAULT_ATTENDEE_COUNT_OPTIONS,
@@ -31,6 +32,7 @@ type Completed = {
   school?: string;
   grade?: string;
   attendeeCount?: number;
+  qrUrl?: string;
 };
 
 type MobileReservationFlowProps = {
@@ -103,6 +105,7 @@ export function MobileReservationFlow({
       school: reservation.school,
       grade: reservation.grade,
       attendeeCount: reservation.attendeeCount,
+      qrUrl: reservation.qrUrl,
     };
 
     setSessions((current) =>
@@ -742,7 +745,7 @@ function DoneStep({
       </div>
       <h2 className="text-lg font-bold text-foreground">예약이 완료되었습니다</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        입장 안내는 문자로 전송됩니다.
+        아래 QR 또는 URL로 입장 확인을 준비해 주세요.
       </p>
 
       <div className="mt-6 w-full space-y-2 rounded-xl border border-border bg-card p-4 text-left">
@@ -768,6 +771,30 @@ function DoneStep({
           label="구분"
           value={completed.path === "enrolled" ? "재원생" : "비재원생"}
         />
+      </div>
+
+      {completed.qrUrl && (
+        <div className="mt-6 w-full border-t border-muted pt-5">
+          <h3 className="text-sm font-semibold text-foreground">입장 QR</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            설명회 당일 현장에서 아래 QR을 제시해 주세요.
+          </p>
+          <div className="mt-4">
+            <QRCodeDisplay
+              value={completed.qrUrl}
+              size={200}
+              downloadName={`${completed.name}_${session.title}_QR`}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-5 w-full rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-left">
+        <p className="text-sm font-semibold text-info-bg-foreground">전날 안내 예정</p>
+        <p className="mt-1 text-xs leading-relaxed text-info-bg-foreground/80">
+          설명회 하루 전, 예약하신 연락처로 일정과 입장 QR 안내를 한 번 더 보내드립니다.
+          당일에는 위 QR 또는 URL을 준비해 주세요.
+        </p>
       </div>
 
       <div className="mt-6 grid w-full gap-2">
