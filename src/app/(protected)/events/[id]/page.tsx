@@ -1,5 +1,4 @@
 import { getEvent } from "@/actions/events";
-import { deleteEvent } from "@/actions/events";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteEventButton } from "./DeleteEventButton";

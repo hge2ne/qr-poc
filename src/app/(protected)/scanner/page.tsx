@@ -2,7 +2,7 @@
 
 import { verifyQRToken } from "@/actions/verify";
 import { QRScanner } from "@/components/QRScanner";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 
 type ScanResult = {
   success: boolean;
@@ -15,6 +15,8 @@ type ScanResult = {
 };
 
 const GATE_OPTIONS = [1, 2, 3, 4];
+const SCANNER_DEVICE_STORAGE_KEY = "scanner-device";
+const SCANNER_DEVICE_CHANGE_EVENT = "scanner-device-change";
 
 function detectDevice(): string {
   const ua = navigator.userAgent;
@@ -26,29 +28,61 @@ function detectDevice(): string {
   return "PC";
 }
 
+function getStoredGateNumber(): number | null {
+  if (typeof window === "undefined") return null;
+
+  const saved = localStorage.getItem(SCANNER_DEVICE_STORAGE_KEY);
+  if (!saved) return null;
+
+  const gateNumber = Number(saved);
+  return GATE_OPTIONS.includes(gateNumber) ? gateNumber : null;
+}
+
+function subscribeGateNumber(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === SCANNER_DEVICE_STORAGE_KEY) onStoreChange();
+  };
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(SCANNER_DEVICE_CHANGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(SCANNER_DEVICE_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+function subscribeToHydration(onStoreChange: () => void) {
+  onStoreChange();
+  return () => {};
+}
+
 export default function ScannerPage() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [processing, setProcessing] = useState(false);
   const [lastToken, setLastToken] = useState("");
-  const [gateNumber, setGateNumber] = useState<number | null>(null);
-  const [deviceType, setDeviceType] = useState("");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("scanner-device");
-    if (saved) setGateNumber(Number(saved));
-    setDeviceType(detectDevice());
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribeToHydration, () => true, () => false);
+  const gateNumber = useSyncExternalStore(
+    subscribeGateNumber,
+    getStoredGateNumber,
+    () => null
+  );
+  const deviceType = useSyncExternalStore(
+    subscribeToHydration,
+    () => (typeof navigator === "undefined" ? "" : detectDevice()),
+    () => ""
+  );
 
   const selectGate = (num: number) => {
-    localStorage.setItem("scanner-device", String(num));
-    setGateNumber(num);
+    localStorage.setItem(SCANNER_DEVICE_STORAGE_KEY, String(num));
+    window.dispatchEvent(new Event(SCANNER_DEVICE_CHANGE_EVENT));
   };
 
   const clearGate = () => {
-    localStorage.removeItem("scanner-device");
-    setGateNumber(null);
+    localStorage.removeItem(SCANNER_DEVICE_STORAGE_KEY);
+    window.dispatchEvent(new Event(SCANNER_DEVICE_CHANGE_EVENT));
   };
 
   const handleScan = useCallback(

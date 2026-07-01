@@ -10,11 +10,14 @@ type ScannerStatus = "loading" | "active" | "error";
 
 export function QRScanner({ onScan }: Props) {
   const onScanRef = useRef(onScan);
-  onScanRef.current = onScan;
   const initialized = useRef(false);
   const scannerRef = useRef<import("html5-qrcode").Html5Qrcode | null>(null);
   const [status, setStatus] = useState<ScannerStatus>("loading");
   const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
 
   useEffect(() => {
     if (initialized.current) return;
