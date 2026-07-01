@@ -31,15 +31,22 @@ export default async function AttendeeDetailPage({
             <h1 className="text-xl font-bold text-foreground">{attendee.name}</h1>
             <p className="text-sm text-muted-foreground">{attendee.phone}</p>
             <p className="text-xs text-muted-foreground mt-1">{attendee.event.title}</p>
+            <p className="text-xs text-muted-foreground mt-1">참석 인원 {attendee.attendeeCount}명</p>
           </div>
           <span
             className={`text-xs px-2.5 py-1 rounded-full font-medium ${
               attendee.status === "ENTERED"
                 ? "bg-success/15 text-success/90"
+                : attendee.status === "CANCELLED"
+                  ? "bg-destructive/10 text-destructive"
                 : "bg-muted text-muted-foreground"
             }`}
           >
-            {attendee.status === "ENTERED" ? "✓ 입장 완료" : "미입장"}
+            {attendee.status === "ENTERED"
+              ? "✓ 입장 완료"
+              : attendee.status === "CANCELLED"
+                ? "취소"
+                : "미입장"}
           </span>
         </div>
         {attendee.enteredAt && (

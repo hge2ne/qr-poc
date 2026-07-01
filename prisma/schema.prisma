@@ -15,6 +15,23 @@ enum Role {
 enum AttendeeStatus {
   PENDING
   ENTERED
+  CANCELLED
+}
+
+enum EventReservationStatus {
+  OPEN
+  CLOSED
+  HIDDEN
+}
+
+enum ReservationPath {
+  ENROLLED
+  GUEST
+}
+
+enum ReservationStatus {
+  RESERVED
+  CANCELLED
 }
 
 model User {
@@ -28,25 +45,80 @@ model User {
 }
 
 model Event {
-  id          String     @id @default(cuid())
-  title       String
-  date        DateTime
-  location    String
-  description String?
-  createdAt   DateTime   @default(now())
-  attendees   Attendee[]
+  id                   String                 @id @default(cuid())
+  title                String
+  date                 DateTime
+  campus               String                 @default("송파캠퍼스")
+  round                String?
+  location             String
+  description          String?
+  capacity             Int                    @default(9999)
+  reservationStatus    EventReservationStatus @default(OPEN)
+  attendeeCountEnabled Boolean                @default(false)
+  attendeeCountMax     Int                    @default(1)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @default(now()) @updatedAt
+  attendees            Attendee[]
+  reservations         Reservation[]
 }
 
 model Attendee {
-  id        String         @id @default(cuid())
-  name      String
-  phone     String
-  eventId   String
-  userId    String?
-  qrToken   String         @unique @default(cuid())
-  status    AttendeeStatus @default(PENDING)
-  enteredAt DateTime?
-  createdAt DateTime       @default(now())
-  event     Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user      User?          @relation(fields: [userId], references: [id])
+  id            String         @id @default(cuid())
+  name          String
+  phone         String
+  eventId       String
+  userId        String?
+  reservationId String?        @unique
+  qrToken       String         @unique @default(cuid())
+  status        AttendeeStatus @default(PENDING)
+  attendeeCount Int            @default(1)
+  enteredAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reservation   Reservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  user          User?          @relation(fields: [userId], references: [id])
+}
+
+model Student {
+  id              String        @id @default(cuid())
+  name            String
+  phone           String
+  phoneNormalized String
+  school          String
+  grade           String
+  className       String
+  campus          String?
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @default(now()) @updatedAt
+  reservations    Reservation[]
+
+  @@index([phoneNormalized])
+  @@index([campus])
+}
+
+model Reservation {
+  id              String            @id @default(cuid())
+  eventId         String
+  studentId       String?
+  path            ReservationPath
+  studentName     String
+  phone           String
+  phoneNormalized String
+  school          String
+  grade           String
+  className       String?
+  attendeeCount   Int               @default(1)
+  status          ReservationStatus @default(RESERVED)
+  cancelledAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  student         Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  attendee        Attendee?
+
+  @@index([eventId, status])
+  @@index([phoneNormalized])
+  @@index([studentName, phoneNormalized])
 }

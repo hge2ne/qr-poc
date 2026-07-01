@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { ActionResult } from "./types";
@@ -22,17 +23,24 @@ export async function createAttendee(data: {
   name: string;
   phone: string;
   userId?: string;
+  attendeeCount?: number;
 }): Promise<ActionResult<{ id: string; qrToken: string; qrUrl: string }>> {
   await requireAdmin();
+  const attendeeCount =
+    Number.isInteger(data.attendeeCount) && data.attendeeCount! > 0 ? data.attendeeCount! : 1;
   const attendee = await prisma.attendee.create({
     data: {
       eventId: data.eventId,
       name: data.name,
       phone: data.phone,
       userId: data.userId ?? null,
+      attendeeCount,
     },
   });
   const qrUrl = buildQrUrl(attendee.qrToken);
+  revalidatePath(`/events/${data.eventId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/reserve");
   return { success: true, data: { id: attendee.id, qrToken: attendee.qrToken, qrUrl } };
 }
 
@@ -49,6 +57,7 @@ export async function getAttendees(eventId: string) {
     qrToken: a.qrToken,
     qrUrl: buildQrUrl(a.qrToken),
     status: a.status,
+    attendeeCount: a.attendeeCount,
     enteredAt: a.enteredAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
   }));
@@ -69,6 +78,7 @@ export async function getAttendee(id: string) {
     qrToken: a.qrToken,
     qrUrl: buildQrUrl(a.qrToken),
     status: a.status,
+    attendeeCount: a.attendeeCount,
     enteredAt: a.enteredAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
     event: {
@@ -82,15 +92,29 @@ export async function getAttendee(id: string) {
 
 export async function updateAttendee(
   id: string,
-  data: { name?: string; phone?: string }
+  data: { name?: string; phone?: string; attendeeCount?: number }
 ): Promise<ActionResult> {
   await requireAdmin();
-  await prisma.attendee.update({ where: { id }, data });
+  const attendee = await prisma.attendee.update({
+    where: { id },
+    data: {
+      ...(data.name && { name: data.name }),
+      ...(data.phone && { phone: data.phone }),
+      ...(Number.isInteger(data.attendeeCount) &&
+        data.attendeeCount! > 0 && { attendeeCount: data.attendeeCount }),
+    },
+  });
+  revalidatePath(`/events/${attendee.eventId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/reserve");
   return { success: true };
 }
 
 export async function deleteAttendee(id: string): Promise<ActionResult> {
   await requireAdmin();
-  await prisma.attendee.delete({ where: { id } });
+  const attendee = await prisma.attendee.delete({ where: { id } });
+  revalidatePath(`/events/${attendee.eventId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/reserve");
   return { success: true };
 }

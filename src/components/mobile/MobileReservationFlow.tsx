@@ -1,23 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
+import { createReservation, lookupStudentByPhone } from "@/actions/reservations";
+import type {
+  ReservationInput,
+  ReservationSession,
+  ReservationStudent,
+} from "@/actions/reservationTypes";
+import type { ActionResult } from "@/actions/types";
 import { Logo } from "@/components/Logo";
 import {
   CAMPUSES,
   DEFAULT_ATTENDEE_COUNT_OPTIONS,
-  findStudentByPhone,
   type Campus,
-  type MockSession,
-  type MockStudent,
 } from "./mockData";
-import {
-  addReservation,
-  getReservationSessionsFromSnapshot,
-  getReservationSessionsServerSnapshot,
-  getReservationSessionsSnapshot,
-  subscribeReservationSessions,
-} from "./reservationStorage";
 import { ReservationLookup } from "./ReservationLookup";
 
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -26,7 +23,7 @@ type Path = "enrolled" | "guest";
 const STEP_LABELS = ["캠퍼스 선택", "설명회 선택", "재원생 조회", "비재원생 입력", "예약 완료"];
 
 type Completed = {
-  session: MockSession;
+  session: ReservationSession;
   path: Path;
   name: string;
   phone: string;
@@ -37,6 +34,8 @@ type Completed = {
 };
 
 type MobileReservationFlowProps = {
+  initialSessions: ReservationSession[];
+  initialError?: string;
   embeddedCheck?: boolean;
 };
 
@@ -48,28 +47,24 @@ function formatDate(iso: string): string {
   });
 }
 
-function getAttendeeCountOptions(session: MockSession) {
+function getAttendeeCountOptions(session: ReservationSession) {
   return session.attendeeCountOptions?.length
     ? session.attendeeCountOptions
     : DEFAULT_ATTENDEE_COUNT_OPTIONS;
 }
 
-export function MobileReservationFlow({ embeddedCheck = false }: MobileReservationFlowProps) {
+export function MobileReservationFlow({
+  initialSessions,
+  initialError = "",
+  embeddedCheck = false,
+}: MobileReservationFlowProps) {
   const [step, setStep] = useState<Step>(1);
   const [path, setPath] = useState<Path>("enrolled");
   const [campus, setCampus] = useState<Campus | null>(null);
-  const [session, setSession] = useState<MockSession | null>(null);
+  const [session, setSession] = useState<ReservationSession | null>(null);
+  const [sessions, setSessions] = useState(initialSessions);
   const [completed, setCompleted] = useState<Completed | null>(null);
   const [showCheck, setShowCheck] = useState(false);
-  const sessionsSnapshot = useSyncExternalStore(
-    subscribeReservationSessions,
-    getReservationSessionsSnapshot,
-    getReservationSessionsServerSnapshot,
-  );
-  const sessions = useMemo(
-    () => getReservationSessionsFromSnapshot(sessionsSnapshot),
-    [sessionsSnapshot],
-  );
   const campusSessions = useMemo(
     () => (campus ? sessions.filter((item) => item.campus === campus) : []),
     [campus, sessions],
@@ -92,10 +87,31 @@ export function MobileReservationFlow({ embeddedCheck = false }: MobileReservati
     setShowCheck(false);
   }
 
-  function completeReservation(data: Completed) {
-    addReservation(data);
-    setCompleted(data);
+  async function completeReservation(input: ReservationInput): Promise<ActionResult<Completed>> {
+    const result = await createReservation(input);
+    if (!result.success || !result.data) {
+      return { success: false, error: result.error ?? "예약에 실패했습니다." };
+    }
+
+    const { reservation, session: updatedSession } = result.data;
+    const nextCompleted: Completed = {
+      session: updatedSession,
+      path: reservation.path,
+      name: reservation.name,
+      phone: reservation.phone,
+      extra: reservation.extra,
+      school: reservation.school,
+      grade: reservation.grade,
+      attendeeCount: reservation.attendeeCount,
+    };
+
+    setSessions((current) =>
+      current.map((item) => (item.id === updatedSession.id ? updatedSession : item)),
+    );
+    setSession(updatedSession);
+    setCompleted(nextCompleted);
     setStep(5);
+    return { success: true, data: nextCompleted };
   }
 
   function goBack() {
@@ -146,6 +162,12 @@ export function MobileReservationFlow({ embeddedCheck = false }: MobileReservati
 
       {/* 본문 */}
       <div className="flex-1 px-4 py-4">
+        {initialError && (
+          <p className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {initialError}
+          </p>
+        )}
+
         {step === 1 && (
           <CampusStep
             selected={campus}
@@ -180,12 +202,14 @@ export function MobileReservationFlow({ embeddedCheck = false }: MobileReservati
               setStep(4);
             }}
             onDone={(student, phone, attendeeCount) => {
-              completeReservation({
-                session,
+              return completeReservation({
+                eventId: session.id,
                 path: "enrolled",
                 name: student.name,
                 phone,
-                extra: `${student.grade} · ${student.className}`,
+                school: student.school,
+                grade: student.grade,
+                className: student.className,
                 attendeeCount,
               });
             }}
@@ -196,12 +220,11 @@ export function MobileReservationFlow({ embeddedCheck = false }: MobileReservati
           <GuestStep
             session={session}
             onDone={(data) => {
-              completeReservation({
-                session,
+              return completeReservation({
+                eventId: session.id,
                 path: "guest",
                 name: data.studentName,
                 phone: data.phone,
-                extra: `${data.school} ${data.grade}`,
                 school: data.school,
                 grade: data.grade,
                 attendeeCount: data.attendeeCount,
@@ -262,7 +285,7 @@ function Stepper({ current, path }: { current: Step; path: Path }) {
 
 /* ---------- 선택된 설명회 요약 ---------- */
 
-function SessionSummary({ session }: { session: MockSession }) {
+function SessionSummary({ session }: { session: ReservationSession }) {
   return (
     <div className="mb-4 rounded-xl border border-accent bg-accent p-3">
       <p className="text-xs font-medium text-primary/90">{session.campus}</p>
@@ -328,10 +351,10 @@ function SelectSessionStep({
   onSelect,
 }: {
   campus: Campus;
-  sessions: MockSession[];
+  sessions: ReservationSession[];
   selectedId?: string;
   onOpenCheck?: () => void;
-  onSelect: (s: MockSession) => void;
+  onSelect: (s: ReservationSession) => void;
 }) {
   return (
     <div>
@@ -345,21 +368,33 @@ function SelectSessionStep({
       <div className="space-y-3">
         {sessions.length ? sessions.map((s) => {
           const selected = s.id === selectedId;
+          const isClosed = s.reservationStatus !== "OPEN";
+          const isFull = s.reserved >= s.capacity;
+          const disabled = isClosed || isFull;
           return (
             <button
               key={s.id}
               type="button"
+              disabled={disabled}
               onClick={() => onSelect(s)}
               className={`w-full rounded-xl border p-4 text-left transition-colors ${
                 selected
                   ? "border-ring bg-accent"
-                  : "border-border bg-card hover:border-primary/40"
+                  : disabled
+                    ? "border-border bg-muted/40 opacity-70"
+                    : "border-border bg-card hover:border-primary/40"
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-primary/90">{s.campus}</span>
-                <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success/90">
-                  접수중
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    disabled
+                      ? "bg-muted text-muted-foreground"
+                      : "bg-success/15 text-success/90"
+                  }`}
+                >
+                  {isFull ? "마감" : isClosed ? "접수중지" : "접수중"}
                 </span>
               </div>
               <p className="mt-1 text-sm font-semibold text-foreground">{s.title}</p>
@@ -367,6 +402,9 @@ function SelectSessionStep({
                 {formatDate(s.date)} {s.time}
               </p>
               <p className="text-xs text-muted-foreground">{s.location}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                예약 {s.reserved} / {s.capacity}명
+              </p>
               {s.attendeeCountEnabled && (
                 <p className="mt-2 text-[11px] font-medium text-primary">
                   참석 인원 입력
@@ -410,32 +448,49 @@ function EnrolledStep({
   onGuest,
   onDone,
 }: {
-  session: MockSession;
+  session: ReservationSession;
   onGuest: () => void;
-  onDone: (student: MockStudent, phone: string, attendeeCount?: number) => void;
+  onDone: (
+    student: ReservationStudent,
+    phone: string,
+    attendeeCount?: number,
+  ) => Promise<ActionResult<Completed>>;
 }) {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [found, setFound] = useState<MockStudent | null>(null);
+  const [reserving, setReserving] = useState(false);
+  const [found, setFound] = useState<ReservationStudent | null>(null);
   const attendeeOptions = getAttendeeCountOptions(session);
   const [attendeeCount, setAttendeeCount] = useState(attendeeOptions[0] ?? 1);
 
-  function handleLookup(e: React.FormEvent<HTMLFormElement>) {
+  async function handleLookup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setFound(null);
     setLoading(true);
-    // 목업 조회 (약간의 지연으로 실제 조회처럼 표현)
-    setTimeout(() => {
-      const student = findStudentByPhone(phone);
-      setLoading(false);
-      if (!student) {
-        setError("등록된 재원생 정보를 찾을 수 없습니다.");
-        return;
-      }
-      setFound(student);
-    }, 400);
+    const result = await lookupStudentByPhone(phone);
+    setLoading(false);
+    if (!result.success || !result.data) {
+      setError(result.error ?? "등록된 재원생 정보를 찾을 수 없습니다.");
+      return;
+    }
+    setFound(result.data);
+  }
+
+  async function handleReserve() {
+    if (!found) return;
+    setError("");
+    setReserving(true);
+    const result = await onDone(
+      found,
+      phone,
+      session.attendeeCountEnabled ? attendeeCount : undefined,
+    );
+    setReserving(false);
+    if (!result.success) {
+      setError(result.error ?? "예약에 실패했습니다.");
+    }
   }
 
   return (
@@ -473,14 +528,16 @@ function EnrolledStep({
 
         {found ? (
           <div className="rounded-xl border border-success/30 bg-success/10 p-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-start gap-2">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success/15 text-xs text-success">
                 ✓
               </span>
-              <span className="text-sm font-semibold text-foreground">{found.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {found.grade} · {found.className}
-              </span>
+              <div>
+                <span className="text-sm font-semibold text-foreground">{found.name}</span>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {found.school} · {found.grade} · {found.className}
+                </p>
+              </div>
             </div>
             {session.attendeeCountEnabled && (
               <AttendeeCountField
@@ -491,12 +548,11 @@ function EnrolledStep({
             )}
             <button
               type="button"
-              onClick={() =>
-                onDone(found, phone, session.attendeeCountEnabled ? attendeeCount : undefined)
-              }
-              className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+              disabled={reserving}
+              onClick={handleReserve}
+              className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              이 정보로 예약하기
+              {reserving ? "예약 중..." : "이 정보로 예약하기"}
             </button>
           </div>
         ) : (
@@ -529,38 +585,40 @@ function GuestStep({
   session,
   onDone,
 }: {
-  session: MockSession;
+  session: ReservationSession;
   onDone: (data: {
     studentName: string;
     school: string;
     grade: string;
     phone: string;
     attendeeCount?: number;
-  }) => void;
+  }) => Promise<ActionResult<Completed>>;
 }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const attendeeOptions = getAttendeeCountOptions(session);
   const [attendeeCount, setAttendeeCount] = useState(attendeeOptions[0] ?? 1);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
+    setError("");
     const form = e.currentTarget;
     const studentName = (form.elements.namedItem("studentName") as HTMLInputElement).value;
     const school = (form.elements.namedItem("school") as HTMLInputElement).value;
     const grade = (form.elements.namedItem("grade") as HTMLInputElement).value;
     const phone = (form.elements.namedItem("phone") as HTMLInputElement).value;
-    // 목업 제출 (지연 후 완료)
-    setTimeout(() => {
-      setLoading(false);
-      onDone({
-        studentName,
-        school,
-        grade,
-        phone,
-        attendeeCount: session.attendeeCountEnabled ? attendeeCount : undefined,
-      });
-    }, 400);
+    const result = await onDone({
+      studentName,
+      school,
+      grade,
+      phone,
+      attendeeCount: session.attendeeCountEnabled ? attendeeCount : undefined,
+    });
+    setLoading(false);
+    if (!result.success) {
+      setError(result.error ?? "예약에 실패했습니다.");
+    }
   }
 
   return (
@@ -620,6 +678,9 @@ function GuestStep({
             options={attendeeOptions}
             onChange={setAttendeeCount}
           />
+        )}
+        {error && (
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
         )}
         <button
           type="submit"

@@ -29,7 +29,7 @@ export default async function DashboardPage() {
           <p className="text-3xl font-bold text-foreground mt-1">{events.length}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">전체 참석자</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">전체 예약 인원</p>
           <p className="text-3xl font-bold text-foreground mt-1">{totalAttendees}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4">
@@ -56,7 +56,7 @@ export default async function DashboardPage() {
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">설명회명</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">날짜</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">장소</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">참석 / 입장</th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">예약 / 입장</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-background">
@@ -66,6 +66,7 @@ export default async function DashboardPage() {
                     <Link href={`/events/${event.id}`} className="text-primary hover:underline font-medium text-sm">
                       {event.title}
                     </Link>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{event.campus}</p>
                   </td>
                   <td className="px-5 py-3.5 text-sm text-muted-foreground">
                     {new Date(event.date).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
@@ -74,6 +75,7 @@ export default async function DashboardPage() {
                   <td className="px-5 py-3.5 text-sm text-right">
                     <span className="text-success font-medium">{event.enteredCount}</span>
                     <span className="text-muted-foreground"> / {event.totalCount}명</span>
+                    <p className="text-xs text-muted-foreground">정원 {event.capacity}명</p>
                   </td>
                 </tr>
               ))}

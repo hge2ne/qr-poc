@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Logo } from "@/components/Logo";
 import {
   cancelReservation,
   cancelReservations,
   findReservationsByContact,
-  type StoredReservation,
-} from "./reservationStorage";
+} from "@/actions/reservations";
+import type { StoredReservation } from "@/actions/reservationTypes";
+import { Logo } from "@/components/Logo";
 
 function formatDate(iso: string) {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("ko-KR", {
@@ -33,30 +33,47 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
   const [phone, setPhone] = useState("");
   const [results, setResults] = useState<StoredReservation[] | null>(null);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
-  function searchReservations(nextName = name, nextPhone = phone) {
-    const found = findReservationsByContact({ name: nextName, phone: nextPhone });
+  async function searchReservations(nextName = name, nextPhone = phone) {
+    setLoading(true);
+    const result = await findReservationsByContact({ name: nextName, phone: nextPhone });
+    setLoading(false);
+    if (!result.success) {
+      setResults([]);
+      setMessage(result.error ?? "예약 조회에 실패했습니다.");
+      return;
+    }
+    const found = result.data ?? [];
     setResults(found);
     setMessage(found.length ? "" : "조회된 예약이 없습니다.");
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage("");
-    searchReservations();
+    await searchReservations();
   }
 
-  function refreshResults() {
-    searchReservations(name, phone);
+  async function refreshResults() {
+    await searchReservations(name, phone);
   }
 
-  function handleCancel(id: string) {
+  async function handleCancel(id: string) {
     if (!window.confirm("이 예약의 취소를 요청하시겠습니까?")) return;
-    cancelReservation(id);
-    refreshResults();
+    setCancelling(true);
+    const result = await cancelReservation({ id, name, phone });
+    if (!result.success) {
+      setMessage(result.error ?? "예약 취소에 실패했습니다.");
+      setCancelling(false);
+      return;
+    }
+    await refreshResults();
+    setCancelling(false);
   }
 
-  function handleCancelAll() {
+  async function handleCancelAll() {
     if (!results) return;
     const activeIds = results
       .filter((reservation) => reservation.status === "reserved")
@@ -65,8 +82,15 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
     if (!activeIds.length) return;
     if (!window.confirm("조회된 예약을 모두 취소 요청하시겠습니까?")) return;
 
-    cancelReservations(activeIds);
-    refreshResults();
+    setCancelling(true);
+    const result = await cancelReservations({ ids: activeIds, name, phone });
+    if (!result.success) {
+      setMessage(result.error ?? "예약 취소에 실패했습니다.");
+      setCancelling(false);
+      return;
+    }
+    await refreshResults();
+    setCancelling(false);
   }
 
   const activeCount = results?.filter((reservation) => reservation.status === "reserved").length ?? 0;
@@ -111,9 +135,10 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
           </div>
           <button
             type="submit"
-            className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+            disabled={loading}
+            className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
-            예약 조회
+            {loading ? "조회 중..." : "예약 조회"}
           </button>
         </form>
 
@@ -133,9 +158,10 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
                 <button
                   type="button"
                   onClick={handleCancelAll}
-                  className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
+                  disabled={cancelling}
+                  className="rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50"
                 >
-                  모두 취소 요청
+                  {cancelling ? "처리 중" : "모두 취소 요청"}
                 </button>
               )}
             </div>
@@ -145,6 +171,7 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
                 key={reservation.id}
                 reservation={reservation}
                 onCancel={handleCancel}
+                cancelling={cancelling}
               />
             ))}
           </div>
@@ -174,9 +201,11 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
 function ReservationCard({
   reservation,
   onCancel,
+  cancelling,
 }: {
   reservation: StoredReservation;
   onCancel: (id: string) => void;
+  cancelling: boolean;
 }) {
   const isCancelled = reservation.status === "cancelled";
   const hasSeparatedSchoolGrade = Boolean(reservation.school || reservation.grade);
@@ -242,9 +271,10 @@ function ReservationCard({
         <button
           type="button"
           onClick={() => onCancel(reservation.id)}
-          className="mt-4 w-full rounded-lg border border-destructive/30 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+          disabled={cancelling}
+          className="mt-4 w-full rounded-lg border border-destructive/30 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
-          취소 요청
+          {cancelling ? "처리 중..." : "취소 요청"}
         </button>
       )}
     </div>

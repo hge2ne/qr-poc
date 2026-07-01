@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 import type { ActionResult } from "./types";
@@ -15,11 +16,15 @@ export async function verifyQRToken(token: string): Promise<
 > {
   const attendee = await prisma.attendee.findUnique({
     where: { qrToken: token },
-    include: { event: true },
+    include: { event: true, reservation: true },
   });
 
   if (!attendee) {
     return { success: false, error: "유효하지 않은 QR 코드입니다." };
+  }
+
+  if (attendee.status === "CANCELLED" || attendee.reservation?.status === "CANCELLED") {
+    return { success: false, error: "취소된 예약의 QR 코드입니다." };
   }
 
   if (attendee.status === "ENTERED") {
@@ -40,6 +45,9 @@ export async function verifyQRToken(token: string): Promise<
     data: { status: "ENTERED", enteredAt: new Date() },
     include: { event: true },
   });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/events/${updated.eventId}`);
 
   return {
     success: true,
@@ -70,7 +78,7 @@ export async function getMyQRCodes(): Promise<
 
   const base = process.env.BASE_URL || "http://localhost:3000";
   const attendees = await prisma.attendee.findMany({
-    where: { userId: session.userId },
+    where: { userId: session.userId, status: { not: "CANCELLED" } },
     include: { event: true },
     orderBy: { createdAt: "desc" },
   });

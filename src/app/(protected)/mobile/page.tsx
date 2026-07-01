@@ -1,3 +1,4 @@
+import { getReservationSessions } from "@/actions/reservations";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -6,6 +7,7 @@ import { MobileReservationFlow } from "@/components/mobile/MobileReservationFlow
 export default async function MobilePreviewPage() {
   const session = await getSession();
   if (session?.role !== "ADMIN") redirect("/my-qr");
+  const sessions = await getReservationSessions();
 
   return (
     <div>
@@ -13,7 +15,7 @@ export default async function MobilePreviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">모바일 예약 프리뷰</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            학부모가 휴대폰에서 보는 설명회 예약 화면입니다. (목업 · 저장되지 않음)
+            학부모가 휴대폰에서 보는 설명회 예약 화면입니다. 실제 DB 예약 흐름과 연결됩니다.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             학부모 공개 주소: <code className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">/reserve</code> (로그인 불필요)
@@ -29,7 +31,11 @@ export default async function MobilePreviewPage() {
       </div>
 
       <PhoneFrame>
-        <MobileReservationFlow embeddedCheck />
+        <MobileReservationFlow
+          embeddedCheck
+          initialSessions={sessions.data ?? []}
+          initialError={sessions.success ? undefined : sessions.error}
+        />
       </PhoneFrame>
     </div>
   );

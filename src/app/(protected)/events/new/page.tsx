@@ -1,7 +1,7 @@
 "use client";
 
 import { createEvent } from "@/actions/events";
-import { saveCreatedEventSession } from "@/components/mobile/reservationStorage";
+import { CAMPUSES } from "@/components/mobile/mockData";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -23,14 +23,22 @@ export default function NewEventPage() {
     const get = (name: string) => (form.elements.namedItem(name) as HTMLInputElement).value;
     const title = get("title");
     const date = get("date");
+    const campus = get("campus");
+    const round = get("round") || undefined;
     const location = get("location");
+    const capacity = Number(get("capacity"));
     const description = get("description") || undefined;
 
     const result = await createEvent({
       title,
       date,
+      campus,
+      round,
       location,
+      capacity,
       description,
+      attendeeCountEnabled,
+      attendeeCountMax,
     });
 
     setLoading(false);
@@ -43,15 +51,6 @@ export default function NewEventPage() {
       setError("설명회 생성 결과를 확인할 수 없습니다.");
       return;
     }
-
-    saveCreatedEventSession({
-      id: result.data.id,
-      title,
-      dateTime: date,
-      location,
-      attendeeCountEnabled,
-      attendeeCountOptions: Array.from({ length: attendeeCountMax }, (_, index) => index + 1),
-    });
 
     router.push(`/events/${result.data.id}`);
   }
@@ -88,6 +87,31 @@ export default function NewEventPage() {
               className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
             />
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">캠퍼스 *</label>
+              <select
+                name="campus"
+                required
+                className="w-full border border-input bg-card rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+              >
+                {CAMPUSES.map((campus) => (
+                  <option key={campus} value={campus}>
+                    {campus}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">회차</label>
+              <input
+                name="round"
+                type="text"
+                placeholder="예: 1회차"
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+              />
+            </div>
+          </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">장소 *</label>
             <input
@@ -95,6 +119,17 @@ export default function NewEventPage() {
               type="text"
               required
               placeholder="예: 서울대학교 교육문화회관 대강당"
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">정원 *</label>
+            <input
+              name="capacity"
+              type="number"
+              min={1}
+              required
+              defaultValue={200}
               className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
             />
           </div>

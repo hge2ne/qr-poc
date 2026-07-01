@@ -8,7 +8,12 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const event = await getEvent(id);
   if (!event) notFound();
 
-  const entered = event.attendees.filter((a) => a.status === "ENTERED").length;
+  const activeAttendeeCount = event.attendees
+    .filter((a) => a.status !== "CANCELLED")
+    .reduce((sum, attendee) => sum + attendee.attendeeCount, 0);
+  const entered = event.attendees
+    .filter((a) => a.status === "ENTERED")
+    .reduce((sum, attendee) => sum + attendee.attendeeCount, 0);
 
   return (
     <div>
@@ -32,18 +37,20 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               {new Date(event.date).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
             </p>
             <p className="text-sm text-muted-foreground">{event.location}</p>
+            <p className="text-sm text-muted-foreground">{event.campus}</p>
             {event.description && <p className="text-sm text-muted-foreground mt-1">{event.description}</p>}
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-success">{entered}</p>
-            <p className="text-xs text-muted-foreground">/ {event.attendees.length}명 입장</p>
+            <p className="text-xs text-muted-foreground">/ {activeAttendeeCount}명 입장</p>
+            <p className="mt-1 text-xs text-muted-foreground">정원 {event.capacity}명</p>
           </div>
         </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-muted flex items-center justify-between">
-          <h2 className="font-semibold text-foreground">참석자 목록 ({event.attendees.length}명)</h2>
+          <h2 className="font-semibold text-foreground">참석자 목록 ({activeAttendeeCount}명)</h2>
           <Link
             href={`/events/${event.id}/attendees/new`}
             className="bg-primary text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
@@ -65,6 +72,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               <tr className="border-b border-muted bg-background">
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">이름</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">연락처</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">인원</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">상태</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">입장 시간</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase">QR</th>
@@ -75,15 +83,22 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                 <tr key={a.id} className="hover:bg-background transition-colors">
                   <td className="px-5 py-3.5 text-sm font-medium text-foreground">{a.name}</td>
                   <td className="px-5 py-3.5 text-sm text-muted-foreground">{a.phone}</td>
+                  <td className="px-5 py-3.5 text-sm text-muted-foreground">{a.attendeeCount}명</td>
                   <td className="px-5 py-3.5">
                     <span
                       className={`text-xs px-2 py-1 rounded-full font-medium ${
                         a.status === "ENTERED"
                           ? "bg-success/15 text-success/90"
+                          : a.status === "CANCELLED"
+                            ? "bg-destructive/10 text-destructive"
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {a.status === "ENTERED" ? "입장 완료" : "미입장"}
+                      {a.status === "ENTERED"
+                        ? "입장 완료"
+                        : a.status === "CANCELLED"
+                          ? "취소"
+                          : "미입장"}
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-sm text-muted-foreground">
