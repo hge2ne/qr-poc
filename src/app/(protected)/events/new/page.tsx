@@ -1,14 +1,19 @@
 "use client";
 
 import { createEvent } from "@/actions/events";
+import { saveCreatedEventSession } from "@/components/mobile/reservationStorage";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+const ATTENDEE_COUNT_MAX_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function NewEventPage() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [attendeeCountEnabled, setAttendeeCountEnabled] = useState(false);
+  const [attendeeCountMax, setAttendeeCountMax] = useState(5);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -16,12 +21,16 @@ export default function NewEventPage() {
     setError("");
     const form = e.currentTarget;
     const get = (name: string) => (form.elements.namedItem(name) as HTMLInputElement).value;
+    const title = get("title");
+    const date = get("date");
+    const location = get("location");
+    const description = get("description") || undefined;
 
     const result = await createEvent({
-      title: get("title"),
-      date: get("date"),
-      location: get("location"),
-      description: get("description") || undefined,
+      title,
+      date,
+      location,
+      description,
     });
 
     setLoading(false);
@@ -29,7 +38,22 @@ export default function NewEventPage() {
       setError(result.error ?? "설명회 생성에 실패했습니다.");
       return;
     }
-    router.push(`/events/${result.data?.id}`);
+
+    if (!result.data?.id) {
+      setError("설명회 생성 결과를 확인할 수 없습니다.");
+      return;
+    }
+
+    saveCreatedEventSession({
+      id: result.data.id,
+      title,
+      dateTime: date,
+      location,
+      attendeeCountEnabled,
+      attendeeCountOptions: Array.from({ length: attendeeCountMax }, (_, index) => index + 1),
+    });
+
+    router.push(`/events/${result.data.id}`);
   }
 
   return (
@@ -82,6 +106,46 @@ export default function NewEventPage() {
               placeholder="설명회에 대한 추가 안내사항"
               className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent resize-none"
             />
+          </div>
+          <div className="rounded-xl border border-border bg-background p-4">
+            <label className="flex cursor-pointer items-start justify-between gap-4">
+              <span>
+                <span className="block text-sm font-medium text-foreground">참석 인원 필드</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  예약 화면에서 참석 인원을 선택받습니다.
+                </span>
+              </span>
+              <span className="relative inline-flex h-6 w-11 shrink-0 items-center">
+                <input
+                  type="checkbox"
+                  checked={attendeeCountEnabled}
+                  onChange={(e) => setAttendeeCountEnabled(e.target.checked)}
+                  className="peer sr-only"
+                  aria-label="참석 인원 필드 사용"
+                />
+                <span className="absolute inset-0 rounded-full bg-muted transition-colors peer-checked:bg-primary" />
+                <span className="absolute left-1 h-4 w-4 rounded-full bg-card transition-transform peer-checked:translate-x-5" />
+              </span>
+            </label>
+
+            {attendeeCountEnabled && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  선택 옵션
+                </label>
+                <select
+                  value={attendeeCountMax}
+                  onChange={(e) => setAttendeeCountMax(Number(e.target.value))}
+                  className="w-full border border-input bg-card rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                >
+                  {ATTENDEE_COUNT_MAX_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      1명 ~ {option}명
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           {error && (
             <p className="text-destructive text-sm bg-destructive/10 px-3 py-2 rounded-lg">{error}</p>

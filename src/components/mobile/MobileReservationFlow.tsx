@@ -1,25 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { Logo } from "@/components/Logo";
 import {
-  MOCK_SESSIONS,
+  CAMPUSES,
+  DEFAULT_ATTENDEE_COUNT_OPTIONS,
   findStudentByPhone,
+  type Campus,
   type MockSession,
   type MockStudent,
 } from "./mockData";
+import {
+  addReservation,
+  getReservationSessionsFromSnapshot,
+  getReservationSessionsServerSnapshot,
+  getReservationSessionsSnapshot,
+  subscribeReservationSessions,
+} from "./reservationStorage";
+import { ReservationLookup } from "./ReservationLookup";
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
 type Path = "enrolled" | "guest";
 
-const STEP_LABELS = ["회차 선택", "재원생 조회", "비재원생 입력", "예약 완료"];
+const STEP_LABELS = ["캠퍼스 선택", "설명회 선택", "재원생 조회", "비재원생 입력", "예약 완료"];
 
 type Completed = {
   session: MockSession;
   path: Path;
   name: string;
   phone: string;
-  extra?: string; // 학년/반 또는 학생 이름
+  extra?: string; // 재원생 학년/반 또는 기존 목업 호환 표시값
+  school?: string;
+  grade?: string;
+  attendeeCount?: number;
+};
+
+type MobileReservationFlowProps = {
+  embeddedCheck?: boolean;
 };
 
 function formatDate(iso: string): string {
@@ -30,17 +48,78 @@ function formatDate(iso: string): string {
   });
 }
 
-export function MobileReservationFlow() {
+function getAttendeeCountOptions(session: MockSession) {
+  return session.attendeeCountOptions?.length
+    ? session.attendeeCountOptions
+    : DEFAULT_ATTENDEE_COUNT_OPTIONS;
+}
+
+export function MobileReservationFlow({ embeddedCheck = false }: MobileReservationFlowProps) {
   const [step, setStep] = useState<Step>(1);
   const [path, setPath] = useState<Path>("enrolled");
+  const [campus, setCampus] = useState<Campus | null>(null);
   const [session, setSession] = useState<MockSession | null>(null);
   const [completed, setCompleted] = useState<Completed | null>(null);
+  const [showCheck, setShowCheck] = useState(false);
+  const sessionsSnapshot = useSyncExternalStore(
+    subscribeReservationSessions,
+    getReservationSessionsSnapshot,
+    getReservationSessionsServerSnapshot,
+  );
+  const sessions = useMemo(
+    () => getReservationSessionsFromSnapshot(sessionsSnapshot),
+    [sessionsSnapshot],
+  );
+  const campusSessions = useMemo(
+    () => (campus ? sessions.filter((item) => item.campus === campus) : []),
+    [campus, sessions],
+  );
 
   function reset() {
     setStep(1);
     setPath("enrolled");
+    setCampus(null);
     setSession(null);
     setCompleted(null);
+  }
+
+  function openReservationCheck() {
+    if (embeddedCheck) setShowCheck(true);
+  }
+
+  function returnToReservationFlow() {
+    reset();
+    setShowCheck(false);
+  }
+
+  function completeReservation(data: Completed) {
+    addReservation(data);
+    setCompleted(data);
+    setStep(5);
+  }
+
+  function goBack() {
+    setStep((current) => {
+      if (current === 2) {
+        setCampus(null);
+        setSession(null);
+        return 1;
+      }
+      if (current === 3) {
+        setSession(null);
+        setPath("enrolled");
+        return 2;
+      }
+      if (current === 4) {
+        setPath("enrolled");
+        return 3;
+      }
+      return current;
+    });
+  }
+
+  if (showCheck) {
+    return <ReservationLookup onBackToReserve={returnToReservationFlow} />;
   }
 
   return (
@@ -48,9 +127,9 @@ export function MobileReservationFlow() {
       {/* 앱 바 */}
       <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
         <div className="flex items-center gap-2">
-          {step > 1 && step < 4 && (
+          {step > 1 && step < 5 && (
             <button
-              onClick={() => setStep((s) => (s === 3 ? 2 : ((s - 1) as Step)))}
+              onClick={goBack}
               className="-ml-1 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
               aria-label="뒤로"
             >
@@ -63,58 +142,81 @@ export function MobileReservationFlow() {
       </header>
 
       {/* 진행 표시 */}
-      {step < 4 && <Stepper current={step} path={path} />}
+      {step < 5 && <Stepper current={step} path={path} />}
 
       {/* 본문 */}
       <div className="flex-1 px-4 py-4">
         {step === 1 && (
-          <SelectSessionStep
-            selectedId={session?.id}
-            onSelect={(s) => {
-              setSession(s);
+          <CampusStep
+            selected={campus}
+            onSelect={(nextCampus) => {
+              setCampus(nextCampus);
+              setSession(null);
               setPath("enrolled");
               setStep(2);
             }}
           />
         )}
 
-        {step === 2 && session && (
-          <EnrolledStep
-            session={session}
-            onGuest={() => {
-              setPath("guest");
+        {step === 2 && campus && (
+          <SelectSessionStep
+            campus={campus}
+            sessions={campusSessions}
+            selectedId={session?.id}
+            onOpenCheck={embeddedCheck ? openReservationCheck : undefined}
+            onSelect={(s) => {
+              setSession(s);
+              setPath("enrolled");
               setStep(3);
-            }}
-            onDone={(student, phone) => {
-              setCompleted({
-                session,
-                path: "enrolled",
-                name: student.name,
-                phone,
-                extra: `${student.grade} · ${student.className}`,
-              });
-              setStep(4);
             }}
           />
         )}
 
         {step === 3 && session && (
-          <GuestStep
+          <EnrolledStep
             session={session}
-            onDone={(data) => {
-              setCompleted({
-                session,
-                path: "guest",
-                name: data.parentName,
-                phone: data.phone,
-                extra: data.studentName ? `학생 ${data.studentName}` : undefined,
-              });
+            onGuest={() => {
+              setPath("guest");
               setStep(4);
+            }}
+            onDone={(student, phone, attendeeCount) => {
+              completeReservation({
+                session,
+                path: "enrolled",
+                name: student.name,
+                phone,
+                extra: `${student.grade} · ${student.className}`,
+                attendeeCount,
+              });
             }}
           />
         )}
 
-        {step === 4 && completed && <DoneStep completed={completed} onReset={reset} />}
+        {step === 4 && session && (
+          <GuestStep
+            session={session}
+            onDone={(data) => {
+              completeReservation({
+                session,
+                path: "guest",
+                name: data.studentName,
+                phone: data.phone,
+                extra: `${data.school} ${data.grade}`,
+                school: data.school,
+                grade: data.grade,
+                attendeeCount: data.attendeeCount,
+              });
+            }}
+          />
+        )}
+
+        {step === 5 && completed && (
+          <DoneStep
+            completed={completed}
+            onOpenCheck={embeddedCheck ? openReservationCheck : undefined}
+            onReset={reset}
+          />
+        )}
       </div>
     </div>
   );
@@ -127,8 +229,8 @@ function Stepper({ current, path }: { current: Step; path: Path }) {
     <div className="flex items-center gap-1 bg-card px-4 pb-3">
       {STEP_LABELS.map((label, i) => {
         const n = (i + 1) as Step;
-        // enrolled 경로는 3단계(비재원생 입력)를 건너뜀
-        const skipped = path === "enrolled" && n === 3;
+        // enrolled 경로는 비재원생 입력 단계를 건너뜀
+        const skipped = path === "enrolled" && n === 4;
         const done = n < current && !skipped;
         const active = n === current;
         return (
@@ -158,12 +260,12 @@ function Stepper({ current, path }: { current: Step; path: Path }) {
   );
 }
 
-/* ---------- 선택된 회차 요약 ---------- */
+/* ---------- 선택된 설명회 요약 ---------- */
 
 function SessionSummary({ session }: { session: MockSession }) {
   return (
     <div className="mb-4 rounded-xl border border-accent bg-accent p-3">
-      <p className="text-xs font-medium text-primary/90">{session.round}</p>
+      <p className="text-xs font-medium text-primary/90">{session.campus}</p>
       <p className="mt-0.5 text-sm font-semibold text-foreground">{session.title}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">
         {formatDate(session.date)} {session.time} · {session.location}
@@ -172,56 +274,42 @@ function SessionSummary({ session }: { session: MockSession }) {
   );
 }
 
-/* ---------- STEP 1: 회차 선택 ---------- */
+/* ---------- STEP 1: 캠퍼스 선택 ---------- */
 
-function SelectSessionStep({
-  selectedId,
+function CampusStep({
+  selected,
   onSelect,
 }: {
-  selectedId?: string;
-  onSelect: (s: MockSession) => void;
+  selected: Campus | null;
+  onSelect: (campus: Campus) => void;
 }) {
   return (
     <div>
-      <h2 className="text-lg font-bold text-foreground">설명회 회차 선택</h2>
-      <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        참석하실 회차를 선택해 주세요.
-      </p>
+      <div className="mb-4">
+        <h2 className="text-lg font-bold text-foreground">캠퍼스 선택</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          예약하실 캠퍼스를 선택해 주세요.
+        </p>
+      </div>
+
       <div className="space-y-3">
-        {MOCK_SESSIONS.map((s) => {
-          const remaining = s.capacity - s.reserved;
-          const full = remaining <= 0;
-          const selected = s.id === selectedId;
+        {CAMPUSES.map((campus) => {
+          const active = selected === campus;
           return (
             <button
-              key={s.id}
-              disabled={full}
-              onClick={() => onSelect(s)}
+              key={campus}
+              type="button"
+              onClick={() => onSelect(campus)}
               className={`w-full rounded-xl border p-4 text-left transition-colors ${
-                full
-                  ? "cursor-not-allowed border-border bg-background opacity-60"
-                  : selected
-                    ? "border-ring bg-accent"
-                    : "border-border bg-card hover:border-primary/40"
+                active
+                  ? "border-ring bg-accent"
+                  : "border-border bg-card hover:border-primary/40"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-primary/90">{s.round}</span>
-                {full ? (
-                  <span className="rounded-full bg-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    마감
-                  </span>
-                ) : (
-                  <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success/90">
-                    잔여 {remaining}석
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-sm font-semibold text-foreground">{s.title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {formatDate(s.date)} {s.time}
-              </p>
-              <p className="text-xs text-muted-foreground">{s.location}</p>
+              <span className="text-sm font-semibold text-foreground">{campus}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                선택 가능한 설명회를 확인합니다.
+              </span>
             </button>
           );
         })}
@@ -230,7 +318,92 @@ function SelectSessionStep({
   );
 }
 
-/* ---------- STEP 2: 재원생 연락처 조회 ---------- */
+/* ---------- STEP 2: 설명회 선택 ---------- */
+
+function SelectSessionStep({
+  campus,
+  sessions,
+  selectedId,
+  onOpenCheck,
+  onSelect,
+}: {
+  campus: Campus;
+  sessions: MockSession[];
+  selectedId?: string;
+  onOpenCheck?: () => void;
+  onSelect: (s: MockSession) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-4">
+        <p className="text-xs font-medium text-primary/90">{campus}</p>
+        <h2 className="mt-0.5 text-lg font-bold text-foreground">설명회 선택</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          참석하실 설명회를 선택해 주세요.
+        </p>
+      </div>
+      <div className="space-y-3">
+        {sessions.length ? sessions.map((s) => {
+          const selected = s.id === selectedId;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onSelect(s)}
+              className={`w-full rounded-xl border p-4 text-left transition-colors ${
+                selected
+                  ? "border-ring bg-accent"
+                  : "border-border bg-card hover:border-primary/40"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-primary/90">{s.campus}</span>
+                <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success/90">
+                  접수중
+                </span>
+              </div>
+              <p className="mt-1 text-sm font-semibold text-foreground">{s.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatDate(s.date)} {s.time}
+              </p>
+              <p className="text-xs text-muted-foreground">{s.location}</p>
+              {s.attendeeCountEnabled && (
+                <p className="mt-2 text-[11px] font-medium text-primary">
+                  참석 인원 입력
+                </p>
+              )}
+            </button>
+          );
+        }) : (
+          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+            선택 가능한 설명회가 없습니다.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 border-t border-muted pt-4">
+        {onOpenCheck ? (
+          <button
+            type="button"
+            onClick={onOpenCheck}
+            className="w-full rounded-lg bg-primary py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          >
+            예약 조회/취소
+          </button>
+        ) : (
+          <Link
+            href="/reserve/check"
+            className="block w-full rounded-lg bg-primary py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          >
+            예약 조회/취소
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- STEP 3: 재원생 연락처 조회 ---------- */
 
 function EnrolledStep({
   session,
@@ -239,12 +412,14 @@ function EnrolledStep({
 }: {
   session: MockSession;
   onGuest: () => void;
-  onDone: (student: MockStudent, phone: string) => void;
+  onDone: (student: MockStudent, phone: string, attendeeCount?: number) => void;
 }) {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [found, setFound] = useState<MockStudent | null>(null);
+  const attendeeOptions = getAttendeeCountOptions(session);
+  const [attendeeCount, setAttendeeCount] = useState(attendeeOptions[0] ?? 1);
 
   function handleLookup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -307,9 +482,18 @@ function EnrolledStep({
                 {found.grade} · {found.className}
               </span>
             </div>
+            {session.attendeeCountEnabled && (
+              <AttendeeCountField
+                value={attendeeCount}
+                options={attendeeOptions}
+                onChange={setAttendeeCount}
+              />
+            )}
             <button
               type="button"
-              onClick={() => onDone(found, phone)}
+              onClick={() =>
+                onDone(found, phone, session.attendeeCountEnabled ? attendeeCount : undefined)
+              }
               className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
             >
               이 정보로 예약하기
@@ -339,28 +523,43 @@ function EnrolledStep({
   );
 }
 
-/* ---------- STEP 3: 비재원생 예약 입력 ---------- */
+/* ---------- STEP 4: 비재원생 예약 입력 ---------- */
 
 function GuestStep({
   session,
   onDone,
 }: {
   session: MockSession;
-  onDone: (data: { parentName: string; phone: string; studentName: string }) => void;
+  onDone: (data: {
+    studentName: string;
+    school: string;
+    grade: string;
+    phone: string;
+    attendeeCount?: number;
+  }) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const attendeeOptions = getAttendeeCountOptions(session);
+  const [attendeeCount, setAttendeeCount] = useState(attendeeOptions[0] ?? 1);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     const form = e.currentTarget;
-    const parentName = (form.elements.namedItem("parentName") as HTMLInputElement).value;
-    const phone = (form.elements.namedItem("phone") as HTMLInputElement).value;
     const studentName = (form.elements.namedItem("studentName") as HTMLInputElement).value;
+    const school = (form.elements.namedItem("school") as HTMLInputElement).value;
+    const grade = (form.elements.namedItem("grade") as HTMLInputElement).value;
+    const phone = (form.elements.namedItem("phone") as HTMLInputElement).value;
     // 목업 제출 (지연 후 완료)
     setTimeout(() => {
       setLoading(false);
-      onDone({ parentName, phone, studentName });
+      onDone({
+        studentName,
+        school,
+        grade,
+        phone,
+        attendeeCount: session.attendeeCountEnabled ? attendeeCount : undefined,
+      });
     }, 400);
   }
 
@@ -369,19 +568,41 @@ function GuestStep({
       <SessionSummary session={session} />
       <h2 className="text-lg font-bold text-foreground">비재원생 예약</h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        예약자 정보를 입력해 주세요.
+        학생 정보를 입력해 주세요.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-foreground">학부모 이름 *</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">학생 이름 *</label>
           <input
-            name="parentName"
+            name="studentName"
             type="text"
             required
             placeholder="홍길동"
             className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
           />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-foreground">학교 *</label>
+            <input
+              name="school"
+              type="text"
+              required
+              placeholder="예: 방산중"
+              className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-foreground">학년 *</label>
+            <input
+              name="grade"
+              type="text"
+              required
+              placeholder="예: 중3"
+              className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-foreground">연락처 *</label>
@@ -393,17 +614,13 @@ function GuestStep({
             className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-foreground">
-            학생 이름 <span className="font-normal text-muted-foreground">(선택)</span>
-          </label>
-          <input
-            name="studentName"
-            type="text"
-            placeholder="자녀 이름"
-            className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+        {session.attendeeCountEnabled && (
+          <AttendeeCountField
+            value={attendeeCount}
+            options={attendeeOptions}
+            onChange={setAttendeeCount}
           />
-        </div>
+        )}
         <button
           type="submit"
           disabled={loading}
@@ -416,9 +633,46 @@ function GuestStep({
   );
 }
 
-/* ---------- STEP 4: 예약 완료 ---------- */
+function AttendeeCountField({
+  value,
+  options,
+  onChange,
+}: {
+  value: number;
+  options: number[];
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="mt-3">
+      <label className="mb-1 block text-sm font-medium text-foreground">참석 인원 *</label>
+      <select
+        name="attendeeCount"
+        required
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full rounded-lg border border-input bg-card px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}명
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
-function DoneStep({ completed, onReset }: { completed: Completed; onReset: () => void }) {
+/* ---------- STEP 5: 예약 완료 ---------- */
+
+function DoneStep({
+  completed,
+  onOpenCheck,
+  onReset,
+}: {
+  completed: Completed;
+  onOpenCheck?: () => void;
+  onReset: () => void;
+}) {
   const { session } = completed;
   return (
     <div className="flex flex-col items-center pt-6 text-center">
@@ -431,28 +685,54 @@ function DoneStep({ completed, onReset }: { completed: Completed; onReset: () =>
       </p>
 
       <div className="mt-6 w-full space-y-2 rounded-xl border border-border bg-card p-4 text-left">
-        <SummaryRow label="회차" value={`${session.round} · ${session.title}`} />
+        <SummaryRow label="설명회" value={session.title} />
         <SummaryRow label="일시" value={`${formatDate(session.date)} ${session.time}`} />
+        <SummaryRow label="캠퍼스" value={session.campus} />
         <SummaryRow label="장소" value={session.location} />
         <SummaryRow
           label="예약자"
           value={
-            completed.extra ? `${completed.name} (${completed.extra})` : completed.name
+            completed.path === "enrolled" && completed.extra
+              ? `${completed.name} (${completed.extra})`
+              : completed.name
           }
         />
+        {completed.school && <SummaryRow label="학교" value={completed.school} />}
+        {completed.grade && <SummaryRow label="학년" value={completed.grade} />}
         <SummaryRow label="연락처" value={completed.phone} />
+        {completed.attendeeCount && (
+          <SummaryRow label="참석 인원" value={`${completed.attendeeCount}명`} />
+        )}
         <SummaryRow
           label="구분"
           value={completed.path === "enrolled" ? "재원생" : "비재원생"}
         />
       </div>
 
-      <button
-        onClick={onReset}
-        className="mt-6 w-full rounded-lg border border-input py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background"
-      >
-        처음으로
-      </button>
+      <div className="mt-6 grid w-full gap-2">
+        <button
+          onClick={onReset}
+          className="w-full rounded-lg border border-input py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background"
+        >
+          처음으로
+        </button>
+        {onOpenCheck ? (
+          <button
+            type="button"
+            onClick={onOpenCheck}
+            className="w-full rounded-lg bg-primary py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          >
+            예약 조회/취소
+          </button>
+        ) : (
+          <Link
+            href="/reserve/check"
+            className="w-full rounded-lg bg-primary py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-primary/90"
+          >
+            예약 조회/취소
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

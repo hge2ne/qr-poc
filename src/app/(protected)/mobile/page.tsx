@@ -29,7 +29,7 @@ export default async function MobilePreviewPage() {
       </div>
 
       <PhoneFrame>
-        <MobileReservationFlow />
+        <MobileReservationFlow embeddedCheck />
       </PhoneFrame>
     </div>
   );
