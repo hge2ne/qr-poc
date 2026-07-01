@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/session";
 import { LogoutButton } from "./LogoutButton";
+import { Logo } from "@/components/Logo";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -12,8 +13,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href={session.role === "ADMIN" ? "/dashboard" : "/my-qr"} className="font-bold text-blue-600 text-base">
-              QR 입장 관리
+            <Link href={session.role === "ADMIN" ? "/dashboard" : "/my-qr"} className="flex items-center gap-2">
+              <Logo className="text-lg" />
+              <span className="text-sm font-medium text-gray-600">QR 입장 관리</span>
             </Link>
             {session.role === "ADMIN" && (
               <>
@@ -22,6 +24,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
                 </Link>
                 <Link href="/scanner" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
                   스캐너
+                </Link>
+                <Link href="/mobile" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+                  모바일
                 </Link>
               </>
             )}
@@ -36,7 +41,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
             <span
               className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                 session.role === "ADMIN"
-                  ? "bg-blue-100 text-blue-700"
+                  ? "bg-blue-50 text-blue-700"
                   : "bg-green-100 text-green-700"
               }`}
             >
