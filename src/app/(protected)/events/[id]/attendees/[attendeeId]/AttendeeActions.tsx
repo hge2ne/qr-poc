@@ -14,7 +14,7 @@ export function AttendeeActions({ attendeeId, eventId }: { attendeeId: string; e
 
   return (
     <div className="flex justify-end">
-      <button onClick={handleDelete} className="text-sm text-red-400 hover:text-red-600 transition-colors">
+      <button onClick={handleDelete} className="text-sm text-destructive hover:text-destructive transition-colors">
         참석자 삭제
       </button>
     </div>

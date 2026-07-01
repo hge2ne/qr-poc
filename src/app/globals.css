@@ -1,16 +1,175 @@
 @import "tailwindcss";
 
+/* Brand fonts — Noto Sans KR (body/Korean) + Poppins (display/numerals) */
+@import "@fontsource/noto-sans-kr/400.css";
+@import "@fontsource/noto-sans-kr/500.css";
+@import "@fontsource/noto-sans-kr/600.css";
+@import "@fontsource/noto-sans-kr/700.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/poppins/700.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ===========================================================================
+   NP Edu design tokens (ported from booking-service · .stitch/DESIGN.md)
+   Brand: olive-lime green #638402 · Noto Sans KR · flat, hairline borders
+   =========================================================================== */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.5rem; /* 8px base */
+
+  /* Surfaces */
+  --background: #f6f7f4;        /* mist page background */
+  --foreground: #1c1f1e;        /* charcoal */
+  --card: #ffffff;
+  --card-foreground: #1c1f1e;
+  --popover: #ffffff;
+  --popover-foreground: #1c1f1e;
+
+  /* Brand / semantic */
+  --primary: #638402;           /* olive brand green */
+  --primary-foreground: #ffffff;
+  --secondary: #eef0ea;         /* light neutral surface */
+  --secondary-foreground: #2c3d5e;
+  --muted: #f2f3ef;             /* section-gray band */
+  --muted-foreground: #6b6f69;  /* graphite */
+  --accent: #e9f0d2;            /* olive tint (hover/selected) */
+  --accent-foreground: #1e2a00;
+  --destructive: #d92d20;       /* error / required */
+  --destructive-foreground: #ffffff;
+  --border: #e5e6e2;            /* hairline */
+  --input: #e5e6e2;
+  --ring: #638402;              /* focus ring = brand */
+
+  /* Extended brand tokens */
+  --brand: #638402;
+  --brand-foreground: #ffffff;
+  --brand-tint: #e9f0d2;
+  --navy: #2c3d5e;              /* secondary solid buttons */
+  --navy-foreground: #ffffff;
+  --info: #3a6fb0;
+  --info-foreground: #ffffff;
+  --info-bg: #dbe8fb;           /* notice callout band */
+  --info-bg-foreground: #0c2742;
+  --success: #2f9e44;
+  --success-foreground: #ffffff;
+  --warning: #e8a33d;
+  --warning-foreground: #3a2a00;
+
+  /* Charts */
+  --chart-1: #638402;
+  --chart-2: #2c3d5e;
+  --chart-3: #3a6fb0;
+  --chart-4: #2f9e44;
+  --chart-5: #e8a33d;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+.dark {
+  --background: #16181a;
+  --foreground: #f1f3ef;
+  --card: #1e2123;
+  --card-foreground: #f1f3ef;
+  --popover: #1e2123;
+  --popover-foreground: #f1f3ef;
+  --primary: #aed456;
+  --primary-foreground: #1b2400;
+  --secondary: #2a2e2c;
+  --secondary-foreground: #f1f3ef;
+  --muted: #242826;
+  --muted-foreground: #b4b8b1;
+  --accent: #2f3a18;
+  --accent-foreground: #e9f0d2;
+  --destructive: #ff6b5e;
+  --destructive-foreground: #2a0604;
+  --border: #2e3230;
+  --input: #2e3230;
+  --ring: #aed456;
+  --brand: #aed456;
+  --brand-foreground: #1b2400;
+  --brand-tint: #2f3a18;
+  --navy: #b5c6ef;
+  --navy-foreground: #0b1730;
+  --info: #a5c8ff;
+  --info-foreground: #00284a;
+  --info-bg: #14304f;
+  --info-bg-foreground: #d4e3ff;
+  --success: #6fd483;
+  --success-foreground: #03210b;
+  --warning: #f0c06a;
+  --warning-foreground: #2a1c00;
+  --chart-1: #aed456;
+  --chart-2: #b5c6ef;
+  --chart-3: #a5c8ff;
+  --chart-4: #6fd483;
+  --chart-5: #f0c06a;
 }
 
+@theme inline {
+  --font-sans: 'Noto Sans KR', system-ui, sans-serif;
+  --font-heading: 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: 'Poppins', 'Noto Sans KR', sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-tint: var(--brand-tint);
+  --color-navy: var(--navy);
+  --color-navy-foreground: var(--navy-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-bg: var(--info-bg);
+  --color-info-bg-foreground: var(--info-bg-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+  --radius-full: 9999px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    margin: 0;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+/* ---- QR scanner UI (project-specific) ---- */
 @keyframes scanline {
   0%   { top: 8%; }
   50%  { top: 92%; }

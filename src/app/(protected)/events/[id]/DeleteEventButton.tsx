@@ -13,7 +13,7 @@ export function DeleteEventButton({ eventId }: { eventId: string }) {
   }
 
   return (
-    <button onClick={handleDelete} className="text-sm text-red-400 hover:text-red-600 transition-colors">
+    <button onClick={handleDelete} className="text-sm text-destructive hover:text-destructive transition-colors">
       이 설명회 삭제
     </button>
   );

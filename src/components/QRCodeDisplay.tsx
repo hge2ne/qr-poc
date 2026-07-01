@@ -30,20 +30,20 @@ export function QRCodeDisplay({ value, size = 256, downloadName = "qr-code" }: P
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+      <div className="p-4 bg-card rounded-xl border border-border shadow-sm">
         <QRCodeCanvas id={QR_CANVAS_ID} value={value} size={size} level="H" includeMargin />
       </div>
-      <p className="text-xs text-gray-400 break-all text-center max-w-xs">{value}</p>
+      <p className="text-xs text-muted-foreground break-all text-center max-w-xs">{value}</p>
       <div className="flex gap-2">
         <button
           onClick={handleDownload}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           PNG 다운로드
         </button>
         <button
           onClick={handleCopy}
-          className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+          className="bg-muted text-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-border transition-colors"
         >
           URL 복사
         </button>

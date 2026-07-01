@@ -6,7 +6,7 @@ export function Logo({ className = "" }: { className?: string }) {
       className={`inline-block select-none font-black lowercase leading-none tracking-tight ${className}`}
       aria-label="npr"
     >
-      <span className="rounded-md bg-blue-600 px-[0.4em] py-[0.2em] text-white">npr</span>
+      <span className="rounded-md bg-primary px-[0.4em] py-[0.2em] text-white">npr</span>
     </span>
   );
 }
