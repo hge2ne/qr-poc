@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
 import type { ActionResult } from "./types";
 
@@ -106,8 +107,13 @@ export async function getEvent(id: string) {
     attendees: event.attendees.map((a: typeof event.attendees[number]) => ({
       id: a.id,
       name: a.name,
-      phone: a.phone,
+      phone: formatPhoneNumber(a.phone),
       qrToken: a.qrToken,
+      reservationId: a.reservationId,
+      path: a.path,
+      school: a.school,
+      grade: a.grade,
+      className: a.className,
       status: a.status,
       attendeeCount: a.attendeeCount,
       enteredAt: a.enteredAt?.toISOString() ?? null,

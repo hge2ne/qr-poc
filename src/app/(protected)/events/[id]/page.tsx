@@ -1,6 +1,7 @@
 import { getEvent } from "@/actions/events";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AdminCancelReservationButton } from "./AdminCancelReservationButton";
 import { DeleteEventButton } from "./DeleteEventButton";
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,7 +44,6 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           <div className="text-right">
             <p className="text-2xl font-bold text-success">{entered}</p>
             <p className="text-xs text-muted-foreground">/ {activeAttendeeCount}명 입장</p>
-            <p className="mt-1 text-xs text-muted-foreground">정원 {event.capacity}명</p>
           </div>
         </div>
       </div>
@@ -76,6 +76,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">상태</th>
                 <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">입장 시간</th>
                 <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase">QR</th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase">관리</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-background">
@@ -111,6 +112,19 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                     >
                       QR 보기
                     </Link>
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    {a.reservationId ? (
+                      a.status === "CANCELLED" ? (
+                        <span className="text-xs text-muted-foreground">취소됨</span>
+                      ) : a.status === "ENTERED" ? (
+                        <span className="text-xs text-muted-foreground">입장 완료</span>
+                      ) : (
+                        <AdminCancelReservationButton reservationId={a.reservationId} />
+                      )
+                    ) : (
+                      <span className="text-xs text-muted-foreground">미예약</span>
+                    )}
                   </td>
                 </tr>
               ))}

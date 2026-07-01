@@ -75,7 +75,6 @@ export default async function DashboardPage() {
                   <td className="px-5 py-3.5 text-sm text-right">
                     <span className="text-success font-medium">{event.enteredCount}</span>
                     <span className="text-muted-foreground"> / {event.totalCount}명</span>
-                    <p className="text-xs text-muted-foreground">정원 {event.capacity}명</p>
                   </td>
                 </tr>
               ))}

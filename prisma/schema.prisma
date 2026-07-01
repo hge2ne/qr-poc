@@ -69,6 +69,10 @@ model Attendee {
   eventId       String
   userId        String?
   reservationId String?        @unique
+  path          ReservationPath?
+  school        String?
+  grade         String?
+  className     String?
   qrToken       String         @unique @default(cuid())
   status        AttendeeStatus @default(PENDING)
   attendeeCount Int            @default(1)
@@ -110,6 +114,7 @@ model Reservation {
   grade           String
   className       String?
   attendeeCount   Int               @default(1)
+  reservationUrl  String            @unique
   status          ReservationStatus @default(RESERVED)
   cancelledAt     DateTime?
   createdAt       DateTime          @default(now())

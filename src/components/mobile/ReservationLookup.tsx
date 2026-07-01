@@ -10,6 +10,7 @@ import {
 import type { StoredReservation } from "@/actions/reservationTypes";
 import { Logo } from "@/components/Logo";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
+import { formatPhoneNumber } from "@/lib/phone";
 
 function formatDate(iso: string) {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("ko-KR", {
@@ -131,7 +132,7 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
               type="tel"
               required
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(formatPhoneNumber(e.target.value))}
               placeholder="010-0000-0000"
               className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
             />

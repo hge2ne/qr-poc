@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
 import type { ActionResult } from "./types";
 
@@ -23,17 +24,39 @@ export async function createAttendee(data: {
   name: string;
   phone: string;
   userId?: string;
+  path?: "ENROLLED" | "GUEST";
+  school?: string;
+  grade?: string;
+  className?: string;
   attendeeCount?: number;
 }): Promise<ActionResult<{ id: string; qrToken: string; qrUrl: string }>> {
   await requireAdmin();
   const attendeeCount =
     Number.isInteger(data.attendeeCount) && data.attendeeCount! > 0 ? data.attendeeCount! : 1;
+  const path = data.path === "ENROLLED" || data.path === "GUEST" ? data.path : null;
+  const name = data.name.trim();
+  const phone = data.phone.trim();
+  const school = data.school?.trim() || null;
+  const grade = data.grade?.trim() || null;
+  const className = data.className?.trim() || null;
+
+  if (!name || !phone) {
+    return { success: false, error: "이름과 연락처를 입력해 주세요." };
+  }
+  if (path === "GUEST" && (!school || !grade)) {
+    return { success: false, error: "학생 정보를 모두 입력해 주세요." };
+  }
+
   const attendee = await prisma.attendee.create({
     data: {
       eventId: data.eventId,
-      name: data.name,
-      phone: data.phone,
+      name,
+      phone,
       userId: data.userId ?? null,
+      path,
+      school,
+      grade,
+      className,
       attendeeCount,
     },
   });
@@ -53,11 +76,15 @@ export async function getAttendees(eventId: string) {
   return attendees.map((a) => ({
     id: a.id,
     name: a.name,
-    phone: a.phone,
+    phone: formatPhoneNumber(a.phone),
     qrToken: a.qrToken,
     qrUrl: buildQrUrl(a.qrToken),
     status: a.status,
     attendeeCount: a.attendeeCount,
+    path: a.path,
+    school: a.school,
+    grade: a.grade,
+    className: a.className,
     enteredAt: a.enteredAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
   }));
@@ -73,12 +100,16 @@ export async function getAttendee(id: string) {
   return {
     id: a.id,
     name: a.name,
-    phone: a.phone,
+    phone: formatPhoneNumber(a.phone),
     eventId: a.eventId,
     qrToken: a.qrToken,
     qrUrl: buildQrUrl(a.qrToken),
     status: a.status,
     attendeeCount: a.attendeeCount,
+    path: a.path,
+    school: a.school,
+    grade: a.grade,
+    className: a.className,
     enteredAt: a.enteredAt?.toISOString() ?? null,
     createdAt: a.createdAt.toISOString(),
     event: {

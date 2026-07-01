@@ -1,7 +1,10 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { formatPhoneNumber } from "@/lib/phone";
+import { getSession } from "@/lib/session";
 import type { ActionResult } from "./types";
 import type {
   ReservationInput,
@@ -30,9 +33,23 @@ type EventWithCounts = {
 
 const DEFAULT_ROUND = "신규 회차";
 
+function getBaseUrl(): string {
+  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  const baseUrl = process.env.BASE_URL || (vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000");
+  return baseUrl.replace(/\/$/, "");
+}
+
 function buildQrUrl(qrToken: string): string {
-  const base = process.env.BASE_URL || "http://localhost:3000";
-  return `${base}/verify/${qrToken}`;
+  return `${getBaseUrl()}/verify/${qrToken}`;
+}
+
+function buildReservationUrl(reservationId: string): string {
+  return `${getBaseUrl()}/reserve/${reservationId}`;
+}
+
+function displayReservationUrl(reservationId: string, reservationUrl: string): string {
+  if (reservationUrl.startsWith("/")) return `${getBaseUrl()}${reservationUrl}`;
+  return reservationUrl || buildReservationUrl(reservationId);
 }
 
 function normalizePhone(phone: string): string {
@@ -45,6 +62,14 @@ function normalizeName(name: string): string {
 
 function cleanText(value: string | undefined): string {
   return value?.trim() ?? "";
+}
+
+async function requireAdmin() {
+  const session = await getSession();
+  if (!session || session.role !== "ADMIN") {
+    throw new Error("관리자 권한이 필요합니다.");
+  }
+  return session;
 }
 
 function getDateParts(date: Date) {
@@ -106,6 +131,7 @@ function toStoredReservation(
     grade: string;
     className: string | null;
     attendeeCount: number;
+    reservationUrl: string;
     status: "RESERVED" | "CANCELLED";
     createdAt: Date;
     cancelledAt: Date | null;
@@ -135,11 +161,12 @@ function toStoredReservation(
     },
     path,
     name: reservation.studentName,
-    phone: reservation.phone,
+    phone: formatPhoneNumber(reservation.phone),
     extra: reservation.className ? `${reservation.grade} · ${reservation.className}` : reservation.grade,
     school: reservation.school,
     grade: reservation.grade,
     attendeeCount: reservation.attendeeCount,
+    reservationUrl: displayReservationUrl(reservation.id, reservation.reservationUrl),
     qrUrl: reservation.attendee ? buildQrUrl(reservation.attendee.qrToken) : undefined,
     status: reservation.status === "RESERVED" ? "reserved" : "cancelled",
     createdAt: reservation.createdAt.toISOString(),
@@ -293,8 +320,10 @@ export async function createReservation(
       return { success: false, error: "정원이 마감된 설명회입니다." };
     }
 
+    const reservationId = randomUUID();
     const reservation = await tx.reservation.create({
       data: {
+        id: reservationId,
         eventId,
         studentId,
         path: path === "enrolled" ? "ENROLLED" : "GUEST",
@@ -305,6 +334,7 @@ export async function createReservation(
         grade,
         className: className || null,
         attendeeCount,
+        reservationUrl: buildReservationUrl(reservationId),
       },
       include: { event: true },
     });
@@ -315,6 +345,10 @@ export async function createReservation(
         reservationId: reservation.id,
         name,
         phone,
+        path: path === "enrolled" ? "ENROLLED" : "GUEST",
+        school,
+        grade,
+        className: className || null,
         attendeeCount,
       },
     });
@@ -322,6 +356,7 @@ export async function createReservation(
     const session = toReservationSession(event, reserved + attendeeCount);
     revalidatePath("/reserve");
     revalidatePath("/reserve/check");
+    revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
     revalidatePath(`/events/${eventId}`);
 
@@ -414,6 +449,7 @@ export async function cancelReservation(data: {
 
     revalidatePath("/reserve");
     revalidatePath("/reserve/check");
+    revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
     revalidatePath(`/events/${reservation.eventId}`);
 
@@ -468,9 +504,86 @@ export async function cancelReservations(data: {
     const eventIds = new Set(cancellable.map((reservation) => reservation.eventId));
     revalidatePath("/reserve");
     revalidatePath("/reserve/check");
+    for (const reservation of cancellable) revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
     for (const eventId of eventIds) revalidatePath(`/events/${eventId}`);
 
     return { success: true };
   });
+}
+
+export async function adminCancelReservation(data: {
+  id: string;
+}): Promise<ActionResult> {
+  await requireAdmin();
+
+  const id = cleanText(data.id);
+  if (!id) {
+    return { success: false, error: "예약 정보를 확인할 수 없습니다." };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const reservation = await tx.reservation.findUnique({
+      where: { id },
+      include: { attendee: true },
+    });
+
+    if (!reservation) {
+      return { success: false, error: "예약 정보를 확인할 수 없습니다." };
+    }
+    if (reservation.status === "CANCELLED") return { success: true };
+    if (reservation.attendee?.status === "ENTERED") {
+      return { success: false, error: "이미 입장 완료된 예약은 취소할 수 없습니다." };
+    }
+
+    const cancelledAt = new Date();
+    await tx.reservation.update({
+      where: { id },
+      data: {
+        status: "CANCELLED",
+        cancelledAt,
+      },
+    });
+
+    if (reservation.attendee) {
+      await tx.attendee.update({
+        where: { id: reservation.attendee.id },
+        data: { status: "CANCELLED" },
+      });
+    }
+
+    revalidatePath("/reserve");
+    revalidatePath("/reserve/check");
+    revalidatePath(`/reserve/${reservation.id}`);
+    revalidatePath("/dashboard");
+    revalidatePath(`/events/${reservation.eventId}`);
+
+    return { success: true };
+  });
+}
+
+export async function getReservationDetail(
+  reservationId: string
+): Promise<ActionResult<StoredReservation>> {
+  const id = cleanText(reservationId);
+  if (!id) return { success: false, error: "예약 정보를 확인할 수 없습니다." };
+
+  const reservation = await prisma.reservation.findUnique({
+    where: { id },
+    include: {
+      event: true,
+      attendee: {
+        select: { qrToken: true },
+      },
+    },
+  });
+
+  if (!reservation) {
+    return { success: false, error: "예약 정보를 찾을 수 없습니다." };
+  }
+
+  return {
+    success: true,
+    data: toStoredReservation(reservation),
+  };
 }

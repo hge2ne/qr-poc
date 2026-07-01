@@ -11,6 +11,8 @@ import type {
 import type { ActionResult } from "@/actions/types";
 import { Logo } from "@/components/Logo";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
+import { GRADE_OPTIONS } from "@/lib/grades";
+import { formatPhoneNumber } from "@/lib/phone";
 import {
   CAMPUSES,
   DEFAULT_ATTENDEE_COUNT_OPTIONS,
@@ -32,6 +34,7 @@ type Completed = {
   school?: string;
   grade?: string;
   attendeeCount?: number;
+  reservationUrl: string;
   qrUrl?: string;
 };
 
@@ -105,6 +108,7 @@ export function MobileReservationFlow({
       school: reservation.school,
       grade: reservation.grade,
       attendeeCount: reservation.attendeeCount,
+      reservationUrl: reservation.reservationUrl,
       qrUrl: reservation.qrUrl,
     };
 
@@ -405,9 +409,6 @@ function SelectSessionStep({
                 {formatDate(s.date)} {s.time}
               </p>
               <p className="text-xs text-muted-foreground">{s.location}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                예약 {s.reserved} / {s.capacity}명
-              </p>
               {s.attendeeCountEnabled && (
                 <p className="mt-2 text-[11px] font-medium text-primary">
                   참석 인원 입력
@@ -513,7 +514,7 @@ function EnrolledStep({
             required
             value={phone}
             onChange={(e) => {
-              setPhone(e.target.value);
+              setPhone(formatPhoneNumber(e.target.value));
               setError("");
               setFound(null);
             }}
@@ -599,6 +600,7 @@ function GuestStep({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [phone, setPhone] = useState("");
   const attendeeOptions = getAttendeeCountOptions(session);
   const [attendeeCount, setAttendeeCount] = useState(attendeeOptions[0] ?? 1);
 
@@ -609,8 +611,7 @@ function GuestStep({
     const form = e.currentTarget;
     const studentName = (form.elements.namedItem("studentName") as HTMLInputElement).value;
     const school = (form.elements.namedItem("school") as HTMLInputElement).value;
-    const grade = (form.elements.namedItem("grade") as HTMLInputElement).value;
-    const phone = (form.elements.namedItem("phone") as HTMLInputElement).value;
+    const grade = (form.elements.namedItem("grade") as HTMLSelectElement).value;
     const result = await onDone({
       studentName,
       school,
@@ -656,13 +657,21 @@ function GuestStep({
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-foreground">학년 *</label>
-            <input
+            <select
               name="grade"
-              type="text"
               required
-              placeholder="예: 중3"
-              className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+              defaultValue=""
+              className="w-full rounded-lg border border-input bg-card px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="" disabled>
+                학년 선택
+              </option>
+              {GRADE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div>
@@ -671,6 +680,11 @@ function GuestStep({
             name="phone"
             type="tel"
             required
+            value={phone}
+            onChange={(e) => {
+              setPhone(formatPhoneNumber(e.target.value));
+              setError("");
+            }}
             placeholder="010-0000-0000"
             className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
           />
@@ -745,7 +759,7 @@ function DoneStep({
       </div>
       <h2 className="text-lg font-bold text-foreground">예약이 완료되었습니다</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        아래 QR 또는 URL로 입장 확인을 준비해 주세요.
+        예약 상세 URL에서 상세 정보와 입장 QR을 확인해 주세요.
       </p>
 
       <div className="mt-6 w-full space-y-2 rounded-xl border border-border bg-card p-4 text-left">
@@ -771,6 +785,17 @@ function DoneStep({
           label="구분"
           value={completed.path === "enrolled" ? "재원생" : "비재원생"}
         />
+      </div>
+
+      <div className="mt-4 w-full rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-left">
+        <p className="text-sm font-semibold text-info-bg-foreground">예약 상세 URL</p>
+        <Link
+          href={completed.reservationUrl}
+          target="_blank"
+          className="mt-1 block break-all text-xs font-medium text-info hover:underline"
+        >
+          {completed.reservationUrl}
+        </Link>
       </div>
 
       {completed.qrUrl && (

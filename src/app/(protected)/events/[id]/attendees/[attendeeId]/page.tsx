@@ -30,6 +30,11 @@ export default async function AttendeeDetailPage({
           <div>
             <h1 className="text-xl font-bold text-foreground">{attendee.name}</h1>
             <p className="text-sm text-muted-foreground">{attendee.phone}</p>
+            {(attendee.school || attendee.grade || attendee.className) && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {[attendee.school, attendee.grade, attendee.className].filter(Boolean).join(" · ")}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground mt-1">{attendee.event.title}</p>
             <p className="text-xs text-muted-foreground mt-1">참석 인원 {attendee.attendeeCount}명</p>
           </div>

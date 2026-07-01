@@ -41,7 +41,7 @@ export function QRCodeDisplay({ value, size = 256, downloadName = "qr-code" }: P
           onClick={handleDownload}
           className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
         >
-          PNG 다운로드
+          QR 다운로드
         </button>
         <button
           type="button"
