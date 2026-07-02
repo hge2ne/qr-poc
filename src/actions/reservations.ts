@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
+import { sendReservationSuccessSms } from "@/lib/sms";
 import type { ActionResult } from "./types";
 import type {
   ReservationInput,
@@ -248,7 +249,7 @@ export async function createReservation(
     return { success: false, error: "학부모 연락처를 정확히 입력해 주세요." };
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction<ActionResult<ReservationMutationData>>(async (tx) => {
     const event = await tx.event.findUnique({
       where: { id: eventId },
       include: {
@@ -376,6 +377,27 @@ export async function createReservation(
       },
     };
   });
+
+  if (!result.success || !result.data) return result;
+
+  const { reservation } = result.data;
+  const sms = await sendReservationSuccessSms({
+    to: reservation.phone,
+    studentName: reservation.name,
+    eventTitle: reservation.session.title,
+    eventDateText: `${reservation.session.date} ${reservation.session.time}`,
+    location: reservation.session.location,
+    reservationUrl: reservation.reservationUrl,
+    qrUrl: reservation.qrUrl,
+  });
+
+  return {
+    ...result,
+    data: {
+      ...result.data,
+      smsStatus: sms.status,
+    },
+  };
 }
 
 export async function findReservationsByContact(data: {

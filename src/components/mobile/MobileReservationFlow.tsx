@@ -7,6 +7,7 @@ import type {
   ReservationInput,
   ReservationSession,
   ReservationStudent,
+  SmsDeliveryStatus,
 } from "@/actions/reservationTypes";
 import type { ActionResult } from "@/actions/types";
 import { Logo } from "@/components/Logo";
@@ -36,6 +37,7 @@ type Completed = {
   attendeeCount?: number;
   reservationUrl: string;
   qrUrl?: string;
+  smsStatus?: SmsDeliveryStatus;
 };
 
 type MobileReservationFlowProps = {
@@ -110,6 +112,7 @@ export function MobileReservationFlow({
       attendeeCount: reservation.attendeeCount,
       reservationUrl: reservation.reservationUrl,
       qrUrl: reservation.qrUrl,
+      smsStatus: result.data.smsStatus,
     };
 
     setSessions((current) =>
@@ -754,7 +757,7 @@ function DoneStep({
       </div>
       <h2 className="text-lg font-bold text-foreground">예약이 완료되었습니다</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        예약 상세 URL에서 상세 정보와 입장 QR을 확인해 주세요.
+        예약 상세 URL과 입장 QR을 확인해 주세요.
       </p>
 
       <div className="mt-6 w-full space-y-2 rounded-xl border border-border bg-card p-4 text-left">
@@ -781,6 +784,8 @@ function DoneStep({
           value={completed.path === "enrolled" ? "재원생" : "비재원생"}
         />
       </div>
+
+      <SmsNotice status={completed.smsStatus} phone={completed.phone} />
 
       <div className="mt-4 w-full rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-left">
         <p className="text-sm font-semibold text-info-bg-foreground">예약 상세 URL</p>
@@ -809,14 +814,6 @@ function DoneStep({
         </div>
       )}
 
-      <div className="mt-5 w-full rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-left">
-        <p className="text-sm font-semibold text-info-bg-foreground">전날 안내 예정</p>
-        <p className="mt-1 text-xs leading-relaxed text-info-bg-foreground/80">
-          설명회 하루 전, 예약하신 학부모 연락처로 일정과 입장 QR 안내를 한 번 더 보내드립니다.
-          당일에는 위 QR 또는 URL을 준비해 주세요.
-        </p>
-      </div>
-
       <div className="mt-6 grid w-full gap-2">
         <button
           onClick={onReset}
@@ -841,6 +838,42 @@ function DoneStep({
           </Link>
         )}
       </div>
+    </div>
+  );
+}
+
+function SmsNotice({
+  status,
+  phone,
+}: {
+  status?: SmsDeliveryStatus;
+  phone: string;
+}) {
+  const sent = status === "sent";
+  const failed = status === "failed";
+
+  return (
+    <div
+      className={`mt-5 w-full rounded-xl border px-4 py-3 text-left ${
+        sent
+          ? "border-success/30 bg-success/10"
+          : "border-warning/40 bg-warning/10"
+      }`}
+    >
+      <p
+        className={`text-sm font-semibold ${
+          sent ? "text-success/90" : "text-warning-foreground"
+        }`}
+      >
+        {sent ? "문자 발송 완료" : "문자 발송 안내"}
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-foreground/75">
+        {sent
+          ? `${phone} 번호로 예약 URL과 입장 QR URL을 문자로 발송했습니다.`
+          : failed
+            ? "문자 발송을 완료하지 못했습니다. 아래 예약 URL과 입장 QR을 저장해 주세요."
+            : "문자 발송 설정이 완료되면 예약 URL과 입장 QR URL이 학부모 연락처로 발송됩니다."}
+      </p>
     </div>
   );
 }

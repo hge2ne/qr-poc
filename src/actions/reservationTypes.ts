@@ -1,5 +1,6 @@
 export type ReservationPath = "enrolled" | "guest";
 export type ReservationStatus = "reserved" | "cancelled";
+export type SmsDeliveryStatus = "sent" | "skipped" | "failed";
 
 export type ReservationSession = {
   id: string;
@@ -57,4 +58,5 @@ export type StoredReservation = {
 export type ReservationMutationData = {
   reservation: StoredReservation;
   session: ReservationSession;
+  smsStatus?: SmsDeliveryStatus;
 };
