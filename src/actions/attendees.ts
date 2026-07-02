@@ -183,10 +183,55 @@ export async function updateAttendee(
 
 export async function deleteAttendee(id: string): Promise<ActionResult> {
   await requireAdmin();
-  const attendee = await prisma.attendee.delete({ where: { id } });
-  revalidatePath(`/events/${attendee.eventId}`);
+
+  const result = await prisma.$transaction<ActionResult<{ eventId: string; reservationId?: string }>>(
+    async (tx) => {
+      const attendee = await tx.attendee.findUnique({
+        where: { id },
+        include: { reservation: true },
+      });
+
+      if (!attendee) {
+        return { success: false, error: "참석자 정보를 찾을 수 없습니다." };
+      }
+      if (attendee.status === "ENTERED") {
+        return { success: false, error: "이미 입장 완료된 참석자는 취소할 수 없습니다." };
+      }
+
+      const cancelledAt = new Date();
+      if (attendee.reservation && attendee.reservation.status !== "CANCELLED") {
+        await tx.reservation.update({
+          where: { id: attendee.reservation.id },
+          data: { status: "CANCELLED", cancelledAt },
+        });
+      }
+
+      if (attendee.status !== "CANCELLED") {
+        await tx.attendee.update({
+          where: { id: attendee.id },
+          data: { status: "CANCELLED" },
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          eventId: attendee.eventId,
+          reservationId: attendee.reservationId ?? undefined,
+        },
+      };
+    }
+  );
+
+  if (!result.success || !result.data) {
+    return { success: false, error: result.error ?? "참석자 취소에 실패했습니다." };
+  }
+
+  revalidatePath(`/events/${result.data.eventId}`);
   revalidatePath("/dashboard");
   revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
+  revalidatePath("/reserve/check");
+  if (result.data.reservationId) revalidatePath(`/reserve/${result.data.reservationId}`);
   return { success: true };
 }
