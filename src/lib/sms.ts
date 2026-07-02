@@ -156,8 +156,10 @@ export async function sendReservationSuccessSms(
     `설명회: ${input.eventTitle}`,
     `설명회 일시: ${input.eventDateText}`,
     `장소: ${input.location}`,
-    input.reservationUrl ? `예약 확인: ${input.reservationUrl}` : undefined,
-    input.qrUrl ? `입장 QR: ${input.qrUrl}` : undefined,
+    input.reservationUrl ? `예약 확인 URL` : undefined,
+    input.reservationUrl,
+    input.qrUrl ? `입장 QR URL` : undefined,
+    input.qrUrl,
     `설명회 당일 입장 시 입장 QR 링크를 제시해 주세요.`,
   ]
     .filter(Boolean)
