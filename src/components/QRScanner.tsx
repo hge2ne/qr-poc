@@ -24,6 +24,43 @@ const CAMERA_QUALITY_CONSTRAINTS: MediaTrackConstraints = {
   frameRate: { ideal: 30, max: 30 },
 };
 
+// iPad/태블릿 전면 카메라는 고정 초점 광각이라 QR 이 작고 흐리게 잡힙니다.
+// 터치 기기에서만 살짝 확대해 디코더가 읽을 픽셀을 확보합니다. (Mac 은 정상이라 제외)
+const FRONT_CAMERA_TARGET_ZOOM = 2;
+const isTouchDevice =
+  typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
+
+async function tuneCameraForScanning(scanner: Html5Qrcode) {
+  // 연속 초점을 지원하는 기기에서는 오토포커스를 켭니다.
+  try {
+    const capabilities = scanner.getRunningTrackCapabilities() as MediaTrackCapabilities & {
+      focusMode?: string[];
+    };
+    if (capabilities.focusMode?.includes("continuous")) {
+      await scanner.applyVideoConstraints({
+        advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+      });
+    }
+  } catch {
+    // 초점 제어를 지원하지 않는 브라우저는 무시합니다.
+  }
+
+  if (!isTouchDevice) return;
+
+  // 고정 초점 전면 카메라에서 QR 확대를 위해 줌을 적용합니다.
+  try {
+    const zoom = scanner.getRunningTrackCameraCapabilities().zoomFeature();
+    if (zoom.isSupported()) {
+      const target = Math.min(FRONT_CAMERA_TARGET_ZOOM, zoom.max());
+      if (target > (zoom.value() ?? 1)) {
+        await zoom.apply(target);
+      }
+    }
+  } catch {
+    // 줌 미지원 기기는 기본 배율로 계속 진행합니다.
+  }
+}
+
 const SCAN_CONFIG: Html5QrcodeCameraScanConfig = {
   fps: 20,
   disableFlip: false,
@@ -117,6 +154,8 @@ export function QRScanner({ onScan }: Props) {
           // Some Android WebViews reject quality upgrades after permission.
           // Keep the scanner running with the browser-selected camera settings.
         }
+
+        await tuneCameraForScanning(scanner);
 
         try {
           const torchCapability = scanner
@@ -246,7 +285,9 @@ export function QRScanner({ onScan }: Props) {
       {/* 하단 안내 텍스트 */}
       {status === "active" && (
         <p className="absolute bottom-3 left-0 right-0 text-center text-white/70 text-xs">
-          QR 코드를 사각형 안에 크게 맞춰주세요
+          {isTouchDevice
+            ? "QR 을 20~30cm 정도 떨어뜨려 사각형 안에 맞춰주세요"
+            : "QR 코드를 사각형 안에 크게 맞춰주세요"}
         </p>
       )}
     </div>
