@@ -791,7 +791,6 @@ function DoneStep({
         <p className="text-sm font-semibold text-info-bg-foreground">예약 상세 URL</p>
         <Link
           href={completed.reservationUrl}
-          target="_blank"
           className="mt-1 block break-all text-xs font-medium text-info hover:underline"
         >
           {completed.reservationUrl}

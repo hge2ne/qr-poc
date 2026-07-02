@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getReservationDetail } from "@/actions/reservations";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
@@ -92,12 +91,9 @@ export default async function ReservationDetailPage({
 
         <section className="mt-4 rounded-xl border border-info/30 bg-info-bg px-4 py-3">
           <h2 className="text-sm font-semibold text-info-bg-foreground">예약 URL</h2>
-          <Link
-            href={reservation.reservationUrl}
-            className="mt-1 block break-all text-xs font-medium text-info hover:underline"
-          >
+          <p className="mt-1 break-all text-xs font-medium text-info">
             {reservation.reservationUrl}
-          </Link>
+          </p>
         </section>
 
         <section className="mt-5 rounded-2xl border border-border bg-card p-5 text-center">
@@ -120,12 +116,9 @@ export default async function ReservationDetailPage({
           </div>
         </section>
 
-        <Link
-          href="/reserve"
-          className="mt-5 rounded-lg border border-input py-2.5 text-center text-sm font-medium text-muted-foreground transition-colors hover:bg-background"
-        >
-          예약 화면으로
-        </Link>
+        <p className="mt-5 rounded-lg border border-border bg-card px-4 py-3 text-center text-xs leading-relaxed text-muted-foreground">
+          이 화면에서 예약 정보와 입장 QR을 계속 확인할 수 있습니다.
+        </p>
       </main>
     </div>
   );
