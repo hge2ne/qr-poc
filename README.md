@@ -16,6 +16,25 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## SMS Setup
+
+The reservation and entry confirmation flows send SMS through SOLAPI.
+Set these server-side environment variables in `.env.local` and in your deployment:
+
+```bash
+SMS_ENABLED=true
+SOLAPI_API_KEY=
+SOLAPI_API_SECRET=
+SOLAPI_SENDER=01012345678
+
+# Optional but recommended for POC/demo. If set, only these recipients receive real SMS.
+SMS_TEST_RECIPIENTS=01012345678,01098765432
+```
+
+Set `SMS_DISABLED=true` or omit `SMS_ENABLED=true` to skip sending in local or staging
+environments. SOLAPI requires pre-registering `SOLAPI_SENDER` as a sender number in the
+SOLAPI console before real delivery works.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
