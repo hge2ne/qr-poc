@@ -188,6 +188,7 @@ export async function getPhoneReservationDashboard(eventId: string) {
     where: { id: eventId },
     include: {
       reservations: {
+        where: { source: "PHONE" },
         include: {
           attendee: {
             select: {
@@ -225,6 +226,8 @@ export async function getPhoneReservationDashboard(eventId: string) {
       campus: event.campus,
       round: event.round,
       location: event.location,
+      attendeeCountEnabled: event.attendeeCountEnabled,
+      attendeeCountMax: event.attendeeCountMax,
     },
     metrics: {
       phoneReservationCount: sumSeats(activeReservations),

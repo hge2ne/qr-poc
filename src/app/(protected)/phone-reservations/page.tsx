@@ -142,21 +142,26 @@ export default async function PhoneReservationsPage({
               <h2 className="font-semibold text-foreground">
                 예약자 목록 ({dashboard.metrics.phoneReservationCount}명)
               </h2>
-              <Link
-                href={`/events/${dashboard.event.id}/attendees/new`}
-                className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
-              >
-                + 수동 예약
-              </Link>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <span className="text-xs text-muted-foreground">
+                  선택된 설명회의 수동예약만 표시
+                </span>
+                <Link
+                  href={`/phone-reservations/${dashboard.event.id}/new`}
+                  className="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                >
+                  + 수동예약
+                </Link>
+              </div>
             </div>
             {dashboard.reservations.length === 0 ? (
               <div className="px-5 py-10 text-center text-muted-foreground">
-                <p className="mb-1">예약자가 없습니다.</p>
+                <p className="mb-1">수동예약자가 없습니다.</p>
                 <Link
-                  href={`/events/${dashboard.event.id}/attendees/new`}
+                  href={`/phone-reservations/${dashboard.event.id}/new`}
                   className="text-sm text-primary hover:underline"
                 >
-                  수동 예약 시작 →
+                  수동예약 시작 →
                 </Link>
               </div>
             ) : (

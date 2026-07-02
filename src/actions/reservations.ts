@@ -41,6 +41,8 @@ type EventWithCounts = {
   attendees: { attendeeCount: number }[];
 };
 
+type ReservationSource = "ONLINE" | "PHONE";
+
 const DEFAULT_ROUND = "신규 회차";
 
 function displayReservationUrl(reservationId: string, reservationUrl: string): string {
@@ -233,6 +235,20 @@ export async function lookupStudentByParentPhone(
 export async function createReservation(
   input: ReservationInput
 ): Promise<ActionResult<ReservationMutationData>> {
+  return createReservationWithSource(input, "ONLINE");
+}
+
+export async function createPhoneReservation(
+  input: ReservationInput
+): Promise<ActionResult<ReservationMutationData>> {
+  await requireAdmin();
+  return createReservationWithSource(input, "PHONE");
+}
+
+async function createReservationWithSource(
+  input: ReservationInput,
+  source: ReservationSource
+): Promise<ActionResult<ReservationMutationData>> {
   const eventId = cleanText(input.eventId);
   let phone = cleanText(input.phone);
   let phoneNormalized = normalizePhone(phone);
@@ -337,6 +353,7 @@ export async function createReservation(
         className: className || null,
         attendeeCount,
         reservationUrl: buildShortReservationUrl(reservationId),
+        source,
       },
       include: { event: true },
     });
