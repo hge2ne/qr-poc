@@ -1,55 +1,167 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { Html5Qrcode, Html5QrcodeCameraScanConfig } from "html5-qrcode";
 
 type Props = {
   onScan: (decodedText: string) => void;
 };
 
 type ScannerStatus = "loading" | "active" | "error";
+type TorchCapability = {
+  isSupported: () => boolean;
+  apply: (value: boolean) => Promise<void>;
+  value: () => boolean | null;
+};
+
+const PREFERRED_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { ideal: "environment" },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  frameRate: { ideal: 30, max: 30 },
+};
+
+const FALLBACK_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: "environment",
+};
+
+const SCAN_CONFIG: Html5QrcodeCameraScanConfig = {
+  fps: 20,
+  disableFlip: false,
+  qrbox: (viewfinderWidth, viewfinderHeight) => {
+    const shortestEdge = Math.min(viewfinderWidth, viewfinderHeight);
+    const maxSize = Math.max(120, shortestEdge - 24);
+    const preferredSize = Math.max(220, Math.floor(shortestEdge * 0.78));
+    const size = Math.min(maxSize, preferredSize);
+
+    return { width: size, height: size };
+  },
+};
+
+async function stopScanner(scanner: Html5Qrcode) {
+  try {
+    if (scanner.isScanning) {
+      await scanner.stop();
+    }
+    scanner.clear();
+  } catch {
+    // Camera teardown can race with route changes or permission prompts.
+  }
+}
 
 export function QRScanner({ onScan }: Props) {
+  const generatedId = useId();
+  const previewId = `qr-preview-${generatedId.replaceAll(":", "")}`;
   const onScanRef = useRef(onScan);
-  const initialized = useRef(false);
-  const scannerRef = useRef<import("html5-qrcode").Html5Qrcode | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const torchCapabilityRef = useRef<TorchCapability | null>(null);
   const [status, setStatus] = useState<ScannerStatus>("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchChanging, setTorchChanging] = useState(false);
 
   useEffect(() => {
     onScanRef.current = onScan;
   }, [onScan]);
 
   useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
+    let cancelled = false;
 
-    import("html5-qrcode").then(({ Html5Qrcode }) => {
-      const scanner = new Html5Qrcode("qr-preview");
-      scannerRef.current = scanner;
+    async function startScanner() {
+      try {
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
+        if (cancelled) return;
 
-      scanner
-        .start(
-          { facingMode: "environment" },
-          { fps: 15, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 },
-          (text) => onScanRef.current(text),
-          () => {}
-        )
-        .then(() => setStatus("active"))
-        .catch(() => {
+        const scanner = new Html5Qrcode(previewId, {
+          verbose: false,
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          useBarCodeDetectorIfSupported: true,
+        });
+        scannerRef.current = scanner;
+
+        try {
+          await scanner.start(
+            PREFERRED_CAMERA_CONSTRAINTS,
+            SCAN_CONFIG,
+            (text) => onScanRef.current(text),
+            () => {}
+          );
+        } catch {
+          if (cancelled) return;
+          await scanner.start(
+            FALLBACK_CAMERA_CONSTRAINTS,
+            SCAN_CONFIG,
+            (text) => onScanRef.current(text),
+            () => {}
+          );
+        }
+
+        if (cancelled) {
+          await stopScanner(scanner);
+          return;
+        }
+
+        try {
+          const torchCapability = scanner
+            .getRunningTrackCameraCapabilities()
+            .torchFeature() as TorchCapability;
+          if (torchCapability.isSupported()) {
+            torchCapabilityRef.current = torchCapability;
+            setTorchSupported(true);
+            setTorchOn(Boolean(torchCapability.value()));
+          }
+        } catch {
+          torchCapabilityRef.current = null;
+          setTorchSupported(false);
+        }
+
+        setStatus("active");
+      } catch {
+        if (!cancelled) {
           setStatus("error");
           setErrorMsg("카메라 접근 권한을 허용해 주세요.");
-        });
-    });
+        }
+      }
+    }
+
+    startScanner();
 
     return () => {
-      scannerRef.current?.stop().catch(() => {});
+      cancelled = true;
+      const scanner = scannerRef.current;
+      scannerRef.current = null;
+      torchCapabilityRef.current = null;
+      setTorchSupported(false);
+      setTorchOn(false);
+      if (scanner) void stopScanner(scanner);
     };
-  }, []);
+  }, [previewId]);
+
+  const handleToggleTorch = useCallback(async () => {
+    const torchCapability = torchCapabilityRef.current;
+    if (!torchCapability || torchChanging) return;
+
+    const nextValue = !torchOn;
+    setTorchChanging(true);
+    try {
+      await torchCapability.apply(nextValue);
+      setTorchOn(nextValue);
+    } catch {
+      setTorchSupported(false);
+      torchCapabilityRef.current = null;
+    } finally {
+      setTorchChanging(false);
+    }
+  }, [torchChanging, torchOn]);
 
   return (
     <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
       {/* html5-qrcode 가 여기에 video 엘리먼트를 주입합니다 */}
-      <div id="qr-preview" className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover" />
+      <div
+        id={previewId}
+        className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
+      />
 
       {/* 로딩 오버레이 */}
       {status === "loading" && (
@@ -71,7 +183,10 @@ export function QRScanner({ onScan }: Props) {
       {/* 스캔 영역 코너 마커 + 스캔 라인 */}
       {status === "active" && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="relative w-56 h-56">
+          <div
+            className="relative aspect-square"
+            style={{ width: "min(78%, 340px)" }}
+          >
             {/* 코너 마커 */}
             <span className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-primary rounded-tl-md" />
             <span className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-primary rounded-tr-md" />
@@ -83,10 +198,21 @@ export function QRScanner({ onScan }: Props) {
         </div>
       )}
 
+      {status === "active" && torchSupported && (
+        <button
+          type="button"
+          onClick={handleToggleTorch}
+          disabled={torchChanging}
+          className="absolute right-3 top-3 rounded-lg bg-black/65 px-3 py-1.5 text-xs font-medium text-white shadow-sm backdrop-blur transition-colors hover:bg-black/80 disabled:opacity-50"
+        >
+          {torchOn ? "조명 끄기" : "조명 켜기"}
+        </button>
+      )}
+
       {/* 하단 안내 텍스트 */}
       {status === "active" && (
-        <p className="absolute bottom-3 left-0 right-0 text-center text-white/60 text-xs">
-          QR 코드를 사각형 안에 맞춰주세요
+        <p className="absolute bottom-3 left-0 right-0 text-center text-white/70 text-xs">
+          QR 코드를 사각형 안에 크게 맞춰주세요
         </p>
       )}
     </div>

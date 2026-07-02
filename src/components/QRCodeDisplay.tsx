@@ -9,8 +9,38 @@ type Props = {
   downloadName?: string;
 };
 
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function getCompactQrValue(value: string): string {
+  try {
+    const isAbsoluteUrl = /^https?:\/\//i.test(value);
+    const url = new URL(value, "https://qr.local");
+    const segments = url.pathname.split("/").filter(Boolean).map(decodePathSegment);
+
+    for (const prefix of ["verify", "q"]) {
+      const index = segments.lastIndexOf(prefix);
+      const token = segments[index + 1]?.trim();
+      if (token) {
+        const shortPath = `/q/${encodeURIComponent(token)}`;
+        return isAbsoluteUrl ? `${url.origin}${shortPath}` : shortPath;
+      }
+    }
+  } catch {
+    return value;
+  }
+
+  return value;
+}
+
 export function QRCodeDisplay({ value, size = 256, downloadName = "qr-code" }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const qrValue = getCompactQrValue(value);
 
   const handleDownload = () => {
     const svg = svgRef.current;
@@ -60,7 +90,7 @@ export function QRCodeDisplay({ value, size = 256, downloadName = "qr-code" }: P
       <div className="p-4 bg-card rounded-xl border border-border shadow-sm">
         <QRCodeSVG
           ref={svgRef}
-          value={value}
+          value={qrValue}
           size={size}
           level="H"
           marginSize={4}

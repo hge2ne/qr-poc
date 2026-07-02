@@ -4,7 +4,7 @@ import { verifyQRToken } from "@/actions/verify";
 import type { ScannerEntryEvent } from "@/actions/scannerTypes";
 import { QRScanner } from "@/components/QRScanner";
 import { ScannerManualEntry } from "@/components/ScannerManualEntry";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 type ScanResult = {
   success: boolean;
@@ -105,6 +105,43 @@ function eventMeta(event: ScannerEntryEvent): string {
     .join(" · ");
 }
 
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function extractTokenFromPath(path: string): string {
+  const pathname = path.split(/[?#]/)[0] ?? "";
+  const segments = pathname.split("/").filter(Boolean).map(decodePathSegment);
+
+  for (const prefix of ["verify", "q"]) {
+    const index = segments.lastIndexOf(prefix);
+    const token = segments[index + 1]?.trim();
+    if (token) return token;
+  }
+
+  return "";
+}
+
+function extractQrToken(decodedText: string): string {
+  const text = decodedText.trim();
+  if (!text) return "";
+
+  try {
+    const url = new URL(text, "https://qr.local");
+    const token = extractTokenFromPath(url.pathname);
+    if (token) return token;
+  } catch {
+    const token = extractTokenFromPath(text);
+    if (token) return token;
+  }
+
+  return text;
+}
+
 function ScanResultPanel({
   processing,
   result,
@@ -178,7 +215,8 @@ function ScanResultPanel({
 export function ScannerClient({ initialEvents, initialEventsError }: ScannerClientProps) {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [processing, setProcessing] = useState(false);
-  const [lastToken, setLastToken] = useState("");
+  const lastTokenRef = useRef("");
+  const processingRef = useRef(false);
   const mounted = useSyncExternalStore(subscribeToHydration, () => true, () => false);
   const gateNumber = useSyncExternalStore(
     subscribeGateNumber,
@@ -226,26 +264,34 @@ export function ScannerClient({ initialEvents, initialEventsError }: ScannerClie
         return;
       }
 
-      const parts = decodedText.split("/verify/");
-      const token = parts[parts.length - 1]?.trim();
-      if (!token || token === lastToken) return;
+      const token = extractQrToken(decodedText);
+      if (!token || token === lastTokenRef.current || processingRef.current) return;
 
-      setLastToken(token);
+      lastTokenRef.current = token;
+      processingRef.current = true;
       setProcessing(true);
       setResult(null);
 
-      const res = await verifyQRToken(token, selectedEventId);
-      setProcessing(false);
+      try {
+        const res = await verifyQRToken(token, selectedEventId);
 
-      if (!res.success) {
-        setResult({ success: false, error: res.error });
-      } else {
-        setResult({ success: true, ...res.data });
+        if (!res.success) {
+          setResult({ success: false, error: res.error });
+        } else {
+          setResult({ success: true, ...res.data });
+        }
+      } catch {
+        setResult({ success: false, error: "QR 처리 중 오류가 발생했습니다." });
+      } finally {
+        processingRef.current = false;
+        setProcessing(false);
+
+        setTimeout(() => {
+          if (lastTokenRef.current === token) lastTokenRef.current = "";
+        }, 2500);
       }
-
-      setTimeout(() => setLastToken(""), 3000);
     },
-    [lastToken, selectedEventId]
+    [selectedEventId]
   );
 
   if (!mounted) return null;

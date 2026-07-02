@@ -177,7 +177,7 @@
 }
 
 /* html5-qrcode 가 주입하는 내부 UI 요소 제거 */
-#qr-preview > img,
-#qr-preview #qr-shaded-region {
+[id^="qr-preview-"] > img,
+[id^="qr-preview-"] #qr-shaded-region {
   display: none;
 }
