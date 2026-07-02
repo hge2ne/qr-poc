@@ -143,7 +143,7 @@ function toStoredReservation(
       round: string | null;
       location: string;
     };
-    attendee?: { qrToken: string } | null;
+    attendee?: { qrToken: string; qrUrl: string } | null;
   }
 ): StoredReservation {
   const { date, time } = getDateParts(reservation.event.date);
@@ -167,7 +167,7 @@ function toStoredReservation(
     grade: reservation.grade,
     attendeeCount: reservation.attendeeCount,
     reservationUrl: displayReservationUrl(reservation.id, reservation.reservationUrl),
-    qrUrl: reservation.attendee ? buildQrUrl(reservation.attendee.qrToken) : undefined,
+    qrUrl: reservation.attendee?.qrUrl,
     status: reservation.status === "RESERVED" ? "reserved" : "cancelled",
     createdAt: reservation.createdAt.toISOString(),
     cancelledAt: reservation.cancelledAt?.toISOString(),
@@ -339,6 +339,7 @@ export async function createReservation(
       include: { event: true },
     });
 
+    const qrToken = randomUUID();
     const attendee = await tx.attendee.create({
       data: {
         eventId,
@@ -350,6 +351,8 @@ export async function createReservation(
         grade,
         className: className || null,
         attendeeCount,
+        qrToken,
+        qrUrl: buildQrUrl(qrToken),
       },
     });
 
@@ -387,7 +390,7 @@ export async function findReservationsByContact(data: {
     include: {
       event: true,
       attendee: {
-        select: { qrToken: true },
+        select: { qrToken: true, qrUrl: true },
       },
     },
     orderBy: { createdAt: "desc" },
@@ -577,7 +580,7 @@ export async function getReservationDetail(
     include: {
       event: true,
       attendee: {
-        select: { qrToken: true },
+        select: { qrToken: true, qrUrl: true },
       },
     },
   });

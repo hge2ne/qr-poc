@@ -81,7 +81,7 @@ export async function getQRPass(token: string): Promise<
       eventDate: attendee.event.date.toISOString(),
       eventLocation: attendee.event.location,
       attendeeCount: attendee.attendeeCount,
-      qrUrl: buildQrUrl(attendee.qrToken),
+      qrUrl: attendee.qrUrl || buildQrUrl(attendee.qrToken),
       status: attendee.status === "ENTERED" ? "ENTERED" : "PENDING",
       enteredAt: attendee.enteredAt?.toISOString() ?? null,
     },
@@ -203,7 +203,7 @@ export async function getMyQRCodes(): Promise<
       eventTitle: a.event.title,
       eventDate: a.event.date.toISOString(),
       qrToken: a.qrToken,
-      qrUrl: buildQrUrl(a.qrToken),
+      qrUrl: a.qrUrl || buildQrUrl(a.qrToken),
       status: a.status,
     })),
   };

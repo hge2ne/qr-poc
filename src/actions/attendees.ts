@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -15,8 +16,9 @@ async function requireAdmin() {
 }
 
 function buildQrUrl(qrToken: string): string {
-  const base = process.env.BASE_URL || "http://localhost:3000";
-  return `${base}/verify/${qrToken}`;
+  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  const baseUrl = process.env.BASE_URL || (vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000");
+  return `${baseUrl.replace(/\/$/, "")}/verify/${qrToken}`;
 }
 
 export async function createAttendee(data: {
@@ -47,6 +49,8 @@ export async function createAttendee(data: {
     return { success: false, error: "학생 정보를 모두 입력해 주세요." };
   }
 
+  const qrToken = randomUUID();
+  const qrUrl = buildQrUrl(qrToken);
   const attendee = await prisma.attendee.create({
     data: {
       eventId: data.eventId,
@@ -58,9 +62,10 @@ export async function createAttendee(data: {
       grade,
       className,
       attendeeCount,
+      qrToken,
+      qrUrl,
     },
   });
-  const qrUrl = buildQrUrl(attendee.qrToken);
   revalidatePath(`/events/${data.eventId}`);
   revalidatePath("/dashboard");
   revalidatePath("/phone-reservations");
@@ -79,7 +84,7 @@ export async function getAttendees(eventId: string) {
     name: a.name,
     phone: formatPhoneNumber(a.phone),
     qrToken: a.qrToken,
-    qrUrl: buildQrUrl(a.qrToken),
+    qrUrl: a.qrUrl,
     status: a.status,
     attendeeCount: a.attendeeCount,
     path: a.path,
@@ -104,7 +109,7 @@ export async function getAttendee(id: string) {
     phone: formatPhoneNumber(a.phone),
     eventId: a.eventId,
     qrToken: a.qrToken,
-    qrUrl: buildQrUrl(a.qrToken),
+    qrUrl: a.qrUrl,
     status: a.status,
     attendeeCount: a.attendeeCount,
     path: a.path,

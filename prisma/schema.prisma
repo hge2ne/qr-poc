@@ -84,6 +84,7 @@ model Attendee {
   grade         String?
   className     String?
   qrToken       String         @unique @default(cuid())
+  qrUrl         String         @unique
   status        AttendeeStatus @default(PENDING)
   attendeeCount Int            @default(1)
   enteredAt     DateTime?
