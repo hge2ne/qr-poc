@@ -72,7 +72,7 @@ export default async function ReservationDetailPage({
             <SummaryRow label="예약자" value={reservation.name} />
             {reservation.school && <SummaryRow label="학교" value={reservation.school} />}
             {reservation.grade && <SummaryRow label="학년" value={reservation.grade} />}
-            <SummaryRow label="연락처" value={reservation.phone} />
+            <SummaryRow label="학부모 연락처" value={reservation.phone} />
             {reservation.attendeeCount && (
               <SummaryRow label="참석 인원" value={`${reservation.attendeeCount}명`} />
             )}

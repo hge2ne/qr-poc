@@ -48,7 +48,7 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
           <SummaryRow label="일시" value={eventDate} />
           <SummaryRow label="장소" value={data.eventLocation} />
           <SummaryRow label="예약자" value={data.attendeeName} />
-          <SummaryRow label="연락처" value={data.phone} />
+          <SummaryRow label="학부모 연락처" value={data.phone} />
           <SummaryRow label="참석 인원" value={`${data.attendeeCount}명`} />
           {data.enteredAt && (
             <SummaryRow

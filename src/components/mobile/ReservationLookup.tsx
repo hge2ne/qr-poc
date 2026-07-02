@@ -110,7 +110,7 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
         <div className="mb-4">
           <h2 className="text-lg font-bold text-foreground">예약 조회/취소</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            예약자 이름과 연락처를 입력하면 예약 내역과 취소 요청을 확인할 수 있습니다.
+            예약자 이름과 학부모 연락처를 입력하면 예약 내역과 취소 요청을 확인할 수 있습니다.
           </p>
         </div>
 
@@ -127,7 +127,7 @@ export function ReservationLookup({ onBackToReserve }: { onBackToReserve?: () =>
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">연락처 *</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">학부모 연락처 *</label>
             <input
               type="tel"
               required
@@ -270,7 +270,7 @@ function ReservationCard({
         />
         {reservation.school && <SummaryRow label="학교" value={reservation.school} />}
         {reservation.grade && <SummaryRow label="학년" value={reservation.grade} />}
-        <SummaryRow label="연락처" value={reservation.phone} />
+        <SummaryRow label="학부모 연락처" value={reservation.phone} />
         {reservation.attendeeCount && (
           <SummaryRow label="참석 인원" value={`${reservation.attendeeCount}명`} />
         )}

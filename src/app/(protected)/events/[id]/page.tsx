@@ -94,7 +94,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               <thead>
                 <tr className="border-b border-muted bg-background">
                   <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">이름</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">연락처</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">학부모 연락처</th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">인원</th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">상태</th>
                   <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase">입장 시간</th>

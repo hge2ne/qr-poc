@@ -177,8 +177,8 @@ export function ScannerManualEntry({ selectedEvent, onEntryComplete }: ScannerMa
     <section className="rounded-xl border border-border bg-card p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-foreground">연락처 입장</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">예약 연락처 뒷자리 4자리</p>
+          <h2 className="text-lg font-bold text-foreground">학부모 연락처 입장</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">학부모 연락처 뒷자리 4자리</p>
         </div>
         <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-primary">
           수동
@@ -188,7 +188,7 @@ export function ScannerManualEntry({ selectedEvent, onEntryComplete }: ScannerMa
       <div className="mb-4">
         <div
           className="mb-3 grid grid-cols-4 gap-2"
-          aria-label="입력된 연락처 뒷자리"
+          aria-label="입력된 학부모 연락처 뒷자리"
           aria-live="polite"
         >
           {Array.from({ length: 4 }).map((_, index) => (
@@ -205,7 +205,7 @@ export function ScannerManualEntry({ selectedEvent, onEntryComplete }: ScannerMa
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-2" aria-label="연락처 뒷자리 키패드">
+        <div className="grid grid-cols-3 gap-2" aria-label="학부모 연락처 뒷자리 키패드">
           {DIGIT_KEYS.map((digit) => (
             <button
               key={digit}

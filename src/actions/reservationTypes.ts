@@ -20,7 +20,7 @@ export type ReservationSession = {
 export type ReservationStudent = {
   id: string;
   name: string;
-  phone: string;
+  parentPhone: string;
   school: string;
   grade: string;
   className: string;

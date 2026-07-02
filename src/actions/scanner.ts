@@ -122,7 +122,7 @@ export async function searchScannerStudentsByPhoneLast4(
     prisma.student.findMany({
       where: {
         isActive: true,
-        phoneNormalized: { endsWith: digits },
+        parentPhoneNormalized: { endsWith: digits },
       },
       include: {
         reservations: {
@@ -172,7 +172,7 @@ export async function searchScannerStudentsByPhoneLast4(
       key: `student:${student.id}`,
       studentId: student.id,
       name: student.name,
-      phone: formatPhoneNumber(student.phone),
+      phone: formatPhoneNumber(student.parentPhone),
       school: student.school,
       grade: student.grade,
       className: student.className,
@@ -199,7 +199,7 @@ export async function searchScannerStudentsByPhoneLast4(
       key,
       studentId: reservation.studentId,
       name: reservation.student?.name ?? reservation.studentName,
-      phone: formatPhoneNumber(reservation.student?.phone ?? reservation.phone),
+      phone: formatPhoneNumber(reservation.student?.parentPhone ?? reservation.phone),
       school: reservation.student?.school ?? reservation.school,
       grade: reservation.student?.grade ?? reservation.grade,
       className: reservation.student?.className ?? reservation.className,
@@ -420,9 +420,13 @@ export async function enterUnreservedStudentFromScanner(data: {
       return { success: false, error };
     }
 
-    const normalizedPhone = normalizePhoneNumber(student.phone);
+    const normalizedPhone = normalizePhoneNumber(student.parentPhone);
     const phoneVariants = Array.from(
-      new Set([student.phone, formatPhoneNumber(student.phone), normalizedPhone].filter(Boolean))
+      new Set([
+        student.parentPhone,
+        formatPhoneNumber(student.parentPhone),
+        normalizedPhone,
+      ].filter(Boolean))
     );
     const existing = await tx.attendee.findFirst({
       where: {
@@ -460,7 +464,7 @@ export async function enterUnreservedStudentFromScanner(data: {
           data: {
             eventId,
             name: student.name,
-            phone: student.phone,
+            phone: student.parentPhone,
             path: "ENROLLED",
             school: student.school,
             grade: student.grade,

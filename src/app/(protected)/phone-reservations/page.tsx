@@ -168,7 +168,7 @@ export default async function PhoneReservationsPage({
                         이름
                       </th>
                       <th className="px-5 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
-                        연락처
+                        학부모 연락처
                       </th>
                       <th className="px-5 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
                         구분

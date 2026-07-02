@@ -73,44 +73,44 @@ model Event {
 }
 
 model Attendee {
-  id            String         @id @default(cuid())
+  id            String           @id @default(cuid())
   name          String
   phone         String
   eventId       String
   userId        String?
-  reservationId String?        @unique
+  reservationId String?          @unique
   path          ReservationPath?
   school        String?
   grade         String?
   className     String?
-  qrToken       String         @unique @default(cuid())
-  qrUrl         String         @unique
-  status        AttendeeStatus @default(PENDING)
-  attendeeCount Int            @default(1)
+  qrToken       String           @unique @default(cuid())
+  qrUrl         String           @unique
+  status        AttendeeStatus   @default(PENDING)
+  attendeeCount Int              @default(1)
   enteredAt     DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @default(now()) @updatedAt
-  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  reservation   Reservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
-  user          User?          @relation(fields: [userId], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @default(now()) @updatedAt
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  reservation   Reservation?     @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  user          User?            @relation(fields: [userId], references: [id])
   entryLogs     EntryLog[]
 }
 
 model Student {
-  id              String        @id @default(cuid())
-  name            String
-  phone           String
-  phoneNormalized String
-  school          String
-  grade           String
-  className       String
-  campus          String?
-  isActive        Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @default(now()) @updatedAt
-  reservations    Reservation[]
+  id                    String        @id @default(cuid())
+  name                  String
+  parentPhone           String
+  parentPhoneNormalized String
+  school                String
+  grade                 String
+  className             String
+  campus                String?
+  isActive              Boolean       @default(true)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @default(now()) @updatedAt
+  reservations          Reservation[]
 
-  @@index([phoneNormalized])
+  @@index([parentPhoneNormalized])
   @@index([campus])
 }
 

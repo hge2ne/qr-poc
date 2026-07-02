@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { createReservation, lookupStudentByPhone } from "@/actions/reservations";
+import { createReservation, lookupStudentByParentPhone } from "@/actions/reservations";
 import type {
   ReservationInput,
   ReservationSession,
@@ -208,12 +208,12 @@ export function MobileReservationFlow({
               setPath("guest");
               setStep(4);
             }}
-            onDone={(student, phone, attendeeCount) => {
+            onDone={(student, attendeeCount) => {
               return completeReservation({
                 eventId: session.id,
                 path: "enrolled",
                 name: student.name,
-                phone,
+                phone: student.parentPhone,
                 school: student.school,
                 grade: student.grade,
                 className: student.className,
@@ -454,11 +454,7 @@ function EnrolledStep({
 }: {
   session: ReservationSession;
   onGuest: () => void;
-  onDone: (
-    student: ReservationStudent,
-    phone: string,
-    attendeeCount?: number,
-  ) => Promise<ActionResult<Completed>>;
+  onDone: (student: ReservationStudent, attendeeCount?: number) => Promise<ActionResult<Completed>>;
 }) {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
@@ -473,7 +469,7 @@ function EnrolledStep({
     setError("");
     setFound(null);
     setLoading(true);
-    const result = await lookupStudentByPhone(phone);
+    const result = await lookupStudentByParentPhone(phone);
     setLoading(false);
     if (!result.success || !result.data) {
       setError(result.error ?? "등록된 재원생 정보를 찾을 수 없습니다.");
@@ -488,7 +484,6 @@ function EnrolledStep({
     setReserving(true);
     const result = await onDone(
       found,
-      phone,
       session.attendeeCountEnabled ? attendeeCount : undefined,
     );
     setReserving(false);
@@ -500,14 +495,14 @@ function EnrolledStep({
   return (
     <div>
       <SessionSummary session={session} />
-      <h2 className="text-lg font-bold text-foreground">재원생 연락처 조회</h2>
+      <h2 className="text-lg font-bold text-foreground">재원생 학부모 연락처 조회</h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        학원에 등록된 연락처로 예약자를 확인합니다.
+        학원에 등록된 학부모 연락처로 예약자를 확인합니다.
       </p>
 
       <form onSubmit={handleLookup} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-foreground">연락처 *</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">학부모 연락처 *</label>
           <input
             name="phone"
             type="tel"
@@ -565,7 +560,7 @@ function EnrolledStep({
             disabled={loading}
             className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
-            {loading ? "조회 중..." : "연락처 조회"}
+            {loading ? "조회 중..." : "학부모 연락처 조회"}
           </button>
         )}
       </form>
@@ -675,7 +670,7 @@ function GuestStep({
           </div>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-foreground">연락처 *</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">예약자 연락처 *</label>
           <input
             name="phone"
             type="tel"
@@ -777,7 +772,7 @@ function DoneStep({
         />
         {completed.school && <SummaryRow label="학교" value={completed.school} />}
         {completed.grade && <SummaryRow label="학년" value={completed.grade} />}
-        <SummaryRow label="연락처" value={completed.phone} />
+        <SummaryRow label="학부모 연락처" value={completed.phone} />
         {completed.attendeeCount && (
           <SummaryRow label="참석 인원" value={`${completed.attendeeCount}명`} />
         )}
@@ -817,7 +812,7 @@ function DoneStep({
       <div className="mt-5 w-full rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-left">
         <p className="text-sm font-semibold text-info-bg-foreground">전날 안내 예정</p>
         <p className="mt-1 text-xs leading-relaxed text-info-bg-foreground/80">
-          설명회 하루 전, 예약하신 연락처로 일정과 입장 QR 안내를 한 번 더 보내드립니다.
+          설명회 하루 전, 예약하신 학부모 연락처로 일정과 입장 QR 안내를 한 번 더 보내드립니다.
           당일에는 위 QR 또는 URL을 준비해 주세요.
         </p>
       </div>

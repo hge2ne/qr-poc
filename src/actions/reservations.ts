@@ -199,22 +199,24 @@ export async function getReservationSessions(): Promise<ActionResult<Reservation
   };
 }
 
-export async function lookupStudentByPhone(phone: string): Promise<ActionResult<ReservationStudent>> {
-  const phoneNormalized = normalizePhone(phone);
-  if (phoneNormalized.length < 9) {
-    return { success: false, error: "연락처를 정확히 입력해 주세요." };
+export async function lookupStudentByParentPhone(
+  parentPhone: string
+): Promise<ActionResult<ReservationStudent>> {
+  const parentPhoneNormalized = normalizePhone(parentPhone);
+  if (parentPhoneNormalized.length < 9) {
+    return { success: false, error: "학부모 연락처를 정확히 입력해 주세요." };
   }
 
   const student = await prisma.student.findFirst({
     where: {
-      phoneNormalized,
+      parentPhoneNormalized,
       isActive: true,
     },
     orderBy: { createdAt: "asc" },
   });
 
   if (!student) {
-    return { success: false, error: "등록된 재원생 정보를 찾을 수 없습니다." };
+    return { success: false, error: "등록된 재원생 학부모 연락처를 찾을 수 없습니다." };
   }
 
   return {
@@ -222,7 +224,7 @@ export async function lookupStudentByPhone(phone: string): Promise<ActionResult<
     data: {
       id: student.id,
       name: student.name,
-      phone: student.phone,
+      parentPhone: student.parentPhone,
       school: student.school,
       grade: student.grade,
       className: student.className,
@@ -234,8 +236,8 @@ export async function createReservation(
   input: ReservationInput
 ): Promise<ActionResult<ReservationMutationData>> {
   const eventId = cleanText(input.eventId);
-  const phone = cleanText(input.phone);
-  const phoneNormalized = normalizePhone(phone);
+  let phone = cleanText(input.phone);
+  let phoneNormalized = normalizePhone(phone);
   const path = input.path;
 
   if (!eventId) return { success: false, error: "설명회를 선택해 주세요." };
@@ -243,7 +245,7 @@ export async function createReservation(
     return { success: false, error: "예약 구분이 올바르지 않습니다." };
   }
   if (phoneNormalized.length < 9) {
-    return { success: false, error: "연락처를 정확히 입력해 주세요." };
+    return { success: false, error: "학부모 연락처를 정확히 입력해 주세요." };
   }
 
   return prisma.$transaction(async (tx) => {
@@ -286,14 +288,16 @@ export async function createReservation(
 
     if (path === "enrolled") {
       const student = await tx.student.findFirst({
-        where: { phoneNormalized, isActive: true },
+        where: { parentPhoneNormalized: phoneNormalized, isActive: true },
         orderBy: { createdAt: "asc" },
       });
       if (!student) {
-        return { success: false, error: "등록된 재원생 정보를 찾을 수 없습니다." };
+        return { success: false, error: "등록된 재원생 학부모 연락처를 찾을 수 없습니다." };
       }
       studentId = student.id;
       name = student.name;
+      phone = student.parentPhone;
+      phoneNormalized = student.parentPhoneNormalized;
       school = student.school;
       grade = student.grade;
       className = student.className;

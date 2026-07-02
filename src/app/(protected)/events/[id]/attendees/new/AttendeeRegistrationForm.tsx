@@ -1,7 +1,7 @@
 "use client";
 
 import { createAttendee } from "@/actions/attendees";
-import { lookupStudentByPhone } from "@/actions/reservations";
+import { lookupStudentByParentPhone } from "@/actions/reservations";
 import type { ReservationStudent } from "@/actions/reservationTypes";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
 import { GRADE_OPTIONS } from "@/lib/grades";
@@ -78,7 +78,7 @@ export function AttendeeRegistrationForm({
     setError("");
     setFound(null);
     setLoading(true);
-    const result = await lookupStudentByPhone(enrolledPhone);
+    const result = await lookupStudentByParentPhone(enrolledPhone);
     setLoading(false);
 
     if (!result.success || !result.data) {
@@ -95,7 +95,7 @@ export function AttendeeRegistrationForm({
     const result = await createAttendee({
       eventId,
       name: found.name,
-      phone: enrolledPhone,
+      phone: found.parentPhone,
       path: "ENROLLED",
       school: found.school,
       grade: found.grade,
@@ -204,7 +204,7 @@ export function AttendeeRegistrationForm({
       {registrationPath === "enrolled" ? (
         <form onSubmit={handleLookup} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">연락처 *</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">학부모 연락처 *</label>
             <input
               name="phone"
               type="tel"
@@ -261,7 +261,7 @@ export function AttendeeRegistrationForm({
               disabled={loading}
               className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              {loading ? "조회 중..." : "연락처 조회"}
+              {loading ? "조회 중..." : "학부모 연락처 조회"}
             </button>
           )}
         </form>
@@ -308,7 +308,7 @@ export function AttendeeRegistrationForm({
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">연락처 *</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">예약자 연락처 *</label>
             <input
               name="phone"
               type="tel"
