@@ -4,6 +4,7 @@ import { createAttendee } from "@/actions/attendees";
 import { lookupStudentByParentPhone } from "@/actions/reservations";
 import type { ReservationStudent, SmsDeliveryStatus } from "@/actions/reservationTypes";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
+import { StudentLookupResultList } from "@/components/StudentLookupResultList";
 import { GRADE_OPTIONS } from "@/lib/grades";
 import { formatPhoneNumber } from "@/lib/phone";
 import Link from "next/link";
@@ -62,11 +63,14 @@ export function AttendeeRegistrationForm({
   const [enrolledPhone, setEnrolledPhone] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [attendeeCount, setAttendeeCount] = useState(countOptions[0] ?? 1);
-  const [found, setFound] = useState<ReservationStudent | null>(null);
+  const [foundStudents, setFoundStudents] = useState<ReservationStudent[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedResult | null>(null);
+  const selectedStudent =
+    foundStudents.find((student) => student.id === selectedStudentId) ?? null;
 
   function getSmsNotice(status?: SmsDeliveryStatus) {
     if (status === "sent") return "입장 QR 안내 문자를 학부모 연락처로 발송했습니다.";
@@ -77,36 +81,39 @@ export function AttendeeRegistrationForm({
   function selectPath(nextPath: RegistrationPath) {
     setRegistrationPath(nextPath);
     setError("");
-    setFound(null);
+    setFoundStudents([]);
+    setSelectedStudentId("");
   }
 
   async function handleLookup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    setFound(null);
+    setFoundStudents([]);
+    setSelectedStudentId("");
     setLoading(true);
     const result = await lookupStudentByParentPhone(enrolledPhone);
     setLoading(false);
 
-    if (!result.success || !result.data) {
+    if (!result.success || !result.data?.length) {
       setError(result.error ?? "등록된 재원생 정보를 찾을 수 없습니다.");
       return;
     }
-    setFound(result.data);
+    setFoundStudents(result.data);
+    setSelectedStudentId(result.data[0]?.id ?? "");
   }
 
   async function handleEnrolledSubmit() {
-    if (!found) return;
+    if (!selectedStudent) return;
     setError("");
     setSubmitting(true);
     const result = await createAttendee({
       eventId,
-      name: found.name,
-      phone: found.parentPhone,
+      name: selectedStudent.name,
+      phone: selectedStudent.parentPhone,
       path: "ENROLLED",
-      school: found.school,
-      grade: found.grade,
-      className: found.className,
+      school: selectedStudent.school,
+      grade: selectedStudent.grade,
+      className: selectedStudent.className,
       attendeeCount: attendeeCountEnabled ? attendeeCount : undefined,
     });
     setSubmitting(false);
@@ -115,7 +122,7 @@ export function AttendeeRegistrationForm({
       setError(result.error ?? "등록에 실패했습니다.");
       return;
     }
-    setCreated({ ...result.data, name: found.name });
+    setCreated({ ...result.data, name: selectedStudent.name });
   }
 
   async function handleGuestSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -159,7 +166,8 @@ export function AttendeeRegistrationForm({
             type="button"
             onClick={() => {
               setCreated(null);
-              setFound(null);
+              setFoundStudents([]);
+              setSelectedStudentId("");
               setEnrolledPhone("");
               setGuestPhone("");
               setError("");
@@ -220,7 +228,8 @@ export function AttendeeRegistrationForm({
               onChange={(e) => {
                 setEnrolledPhone(formatPhoneNumber(e.target.value));
                 setError("");
-                setFound(null);
+                setFoundStudents([]);
+                setSelectedStudentId("");
               }}
               placeholder="010-0000-0000"
               className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
@@ -231,19 +240,13 @@ export function AttendeeRegistrationForm({
             <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
           )}
 
-          {found ? (
-            <div className="rounded-xl border border-success/30 bg-success/10 p-4">
-              <div className="flex items-start gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success/15 text-xs text-success">
-                  ✓
-                </span>
-                <div>
-                  <span className="text-sm font-semibold text-foreground">{found.name}</span>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {found.school} · {found.grade} · {found.className}
-                  </p>
-                </div>
-              </div>
+          {foundStudents.length > 0 ? (
+            <div>
+              <StudentLookupResultList
+                students={foundStudents}
+                selectedStudentId={selectedStudentId}
+                onSelect={setSelectedStudentId}
+              />
               {attendeeCountEnabled && (
                 <div className="mt-3">
                   <AttendeeCountField
@@ -255,11 +258,11 @@ export function AttendeeRegistrationForm({
               )}
               <button
                 type="button"
-                disabled={submitting}
+                disabled={submitting || !selectedStudent}
                 onClick={handleEnrolledSubmit}
                 className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
-                {submitting ? "등록 중..." : "이 정보로 등록하기"}
+                {submitting ? "등록 중..." : "선택한 학생으로 등록하기"}
               </button>
             </div>
           ) : (

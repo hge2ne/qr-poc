@@ -201,34 +201,34 @@ export async function getReservationSessions(): Promise<ActionResult<Reservation
 
 export async function lookupStudentByParentPhone(
   parentPhone: string
-): Promise<ActionResult<ReservationStudent>> {
+): Promise<ActionResult<ReservationStudent[]>> {
   const parentPhoneNormalized = normalizePhone(parentPhone);
   if (parentPhoneNormalized.length < 9) {
     return { success: false, error: "학부모 연락처를 정확히 입력해 주세요." };
   }
 
-  const student = await prisma.student.findFirst({
+  const students = await prisma.student.findMany({
     where: {
       parentPhoneNormalized,
       isActive: true,
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ school: "asc" }, { grade: "asc" }, { name: "asc" }, { createdAt: "asc" }],
   });
 
-  if (!student) {
+  if (students.length === 0) {
     return { success: false, error: "등록된 재원생 학부모 연락처를 찾을 수 없습니다." };
   }
 
   return {
     success: true,
-    data: {
+    data: students.map((student) => ({
       id: student.id,
       name: student.name,
       parentPhone: student.parentPhone,
       school: student.school,
       grade: student.grade,
       className: student.className,
-    },
+    })),
   };
 }
 
@@ -301,13 +301,24 @@ async function createReservationWithSource(
     let className = cleanText(input.className);
 
     if (path === "enrolled") {
-      const student = await tx.student.findFirst({
-        where: { parentPhoneNormalized: phoneNormalized, isActive: true },
-        orderBy: { createdAt: "asc" },
+      const inputStudentId = cleanText(input.studentId);
+      const students = await tx.student.findMany({
+        where: {
+          parentPhoneNormalized: phoneNormalized,
+          isActive: true,
+          ...(inputStudentId ? { id: inputStudentId } : {}),
+        },
+        orderBy: [{ school: "asc" }, { grade: "asc" }, { name: "asc" }, { createdAt: "asc" }],
       });
-      if (!student) {
+
+      if (students.length === 0) {
         return { success: false, error: "등록된 재원생 학부모 연락처를 찾을 수 없습니다." };
       }
+      if (!inputStudentId && students.length > 1) {
+        return { success: false, error: "조회된 학생이 여러 명입니다. 학생을 선택해 주세요." };
+      }
+
+      const student = students[0];
       studentId = student.id;
       name = student.name;
       phone = student.parentPhone;

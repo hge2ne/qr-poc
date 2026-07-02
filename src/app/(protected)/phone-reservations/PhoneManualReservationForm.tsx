@@ -3,6 +3,7 @@
 import { createPhoneReservation, lookupStudentByParentPhone } from "@/actions/reservations";
 import type { ReservationStudent, SmsDeliveryStatus } from "@/actions/reservationTypes";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
+import { StudentLookupResultList } from "@/components/StudentLookupResultList";
 import { GRADE_OPTIONS } from "@/lib/grades";
 import { formatPhoneNumber } from "@/lib/phone";
 import Link from "next/link";
@@ -61,11 +62,14 @@ export function PhoneManualReservationForm({
   const [enrolledPhone, setEnrolledPhone] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [attendeeCount, setAttendeeCount] = useState(countOptions[0] ?? 1);
-  const [found, setFound] = useState<ReservationStudent | null>(null);
+  const [foundStudents, setFoundStudents] = useState<ReservationStudent[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedResult | null>(null);
+  const selectedStudent =
+    foundStudents.find((student) => student.id === selectedStudentId) ?? null;
 
   function getSmsNotice(status?: SmsDeliveryStatus) {
     if (status === "sent") return "예약 완료 문자를 학부모 연락처로 발송했습니다.";
@@ -76,22 +80,25 @@ export function PhoneManualReservationForm({
   function selectPath(nextPath: ReservationPath) {
     setReservationPath(nextPath);
     setError("");
-    setFound(null);
+    setFoundStudents([]);
+    setSelectedStudentId("");
   }
 
   async function handleLookup(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    setFound(null);
+    setFoundStudents([]);
+    setSelectedStudentId("");
     setLoading(true);
 
     try {
       const result = await lookupStudentByParentPhone(enrolledPhone);
-      if (!result.success || !result.data) {
+      if (!result.success || !result.data?.length) {
         setError(result.error ?? "등록된 재원생 정보를 찾을 수 없습니다.");
         return;
       }
-      setFound(result.data);
+      setFoundStudents(result.data);
+      setSelectedStudentId(result.data[0]?.id ?? "");
     } catch {
       setError("재원생 조회에 실패했습니다.");
     } finally {
@@ -100,7 +107,7 @@ export function PhoneManualReservationForm({
   }
 
   async function handleEnrolledSubmit() {
-    if (!found) return;
+    if (!selectedStudent) return;
     setError("");
     setSubmitting(true);
 
@@ -108,11 +115,12 @@ export function PhoneManualReservationForm({
       const result = await createPhoneReservation({
         eventId,
         path: "enrolled",
-        name: found.name,
-        phone: found.parentPhone,
-        school: found.school,
-        grade: found.grade,
-        className: found.className,
+        studentId: selectedStudent.id,
+        name: selectedStudent.name,
+        phone: selectedStudent.parentPhone,
+        school: selectedStudent.school,
+        grade: selectedStudent.grade,
+        className: selectedStudent.className,
         attendeeCount: attendeeCountEnabled ? attendeeCount : undefined,
       });
 
@@ -121,7 +129,7 @@ export function PhoneManualReservationForm({
         return;
       }
       setCreated({
-        name: found.name,
+        name: selectedStudent.name,
         qrUrl: result.data.reservation.qrUrl,
         smsStatus: result.data.smsStatus,
       });
@@ -185,7 +193,8 @@ export function PhoneManualReservationForm({
             type="button"
             onClick={() => {
               setCreated(null);
-              setFound(null);
+              setFoundStudents([]);
+              setSelectedStudentId("");
               setEnrolledPhone("");
               setGuestPhone("");
               setError("");
@@ -248,7 +257,8 @@ export function PhoneManualReservationForm({
               onChange={(event) => {
                 setEnrolledPhone(formatPhoneNumber(event.target.value));
                 setError("");
-                setFound(null);
+                setFoundStudents([]);
+                setSelectedStudentId("");
               }}
               placeholder="010-0000-0000"
               className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
@@ -261,19 +271,13 @@ export function PhoneManualReservationForm({
             </p>
           )}
 
-          {found ? (
-            <div className="rounded-xl border border-success/30 bg-success/10 p-4">
-              <div className="flex items-start gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success/15 text-xs text-success">
-                  ✓
-                </span>
-                <div>
-                  <span className="text-sm font-semibold text-foreground">{found.name}</span>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {found.school} · {found.grade} · {found.className}
-                  </p>
-                </div>
-              </div>
+          {foundStudents.length > 0 ? (
+            <div>
+              <StudentLookupResultList
+                students={foundStudents}
+                selectedStudentId={selectedStudentId}
+                onSelect={setSelectedStudentId}
+              />
               {attendeeCountEnabled && (
                 <div className="mt-3">
                   <AttendeeCountField
@@ -285,11 +289,11 @@ export function PhoneManualReservationForm({
               )}
               <button
                 type="button"
-                disabled={submitting}
+                disabled={submitting || !selectedStudent}
                 onClick={handleEnrolledSubmit}
                 className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
-                {submitting ? "예약 중..." : "이 정보로 예약하기"}
+                {submitting ? "예약 중..." : "선택한 학생으로 예약하기"}
               </button>
             </div>
           ) : (

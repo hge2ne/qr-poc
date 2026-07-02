@@ -16,6 +16,7 @@ import type {
 import type { ActionResult } from "@/actions/types";
 import { Logo } from "@/components/Logo";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
+import { StudentLookupResultList } from "@/components/StudentLookupResultList";
 import { GRADE_OPTIONS } from "@/lib/grades";
 import { formatPhoneNumber } from "@/lib/phone";
 import {
@@ -221,6 +222,7 @@ export function MobileReservationFlow({
               return completeReservation({
                 eventId: session.id,
                 path: "enrolled",
+                studentId: student.id,
                 name: student.name,
                 phone: student.parentPhone,
                 school: student.school,
@@ -469,30 +471,35 @@ function EnrolledStep({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [reserving, setReserving] = useState(false);
-  const [found, setFound] = useState<ReservationStudent | null>(null);
+  const [foundStudents, setFoundStudents] = useState<ReservationStudent[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
   const attendeeOptions = getAttendeeCountOptions(session);
   const [attendeeCount, setAttendeeCount] = useState(attendeeOptions[0] ?? 1);
+  const selectedStudent =
+    foundStudents.find((student) => student.id === selectedStudentId) ?? null;
 
   async function handleLookup(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    setFound(null);
+    setFoundStudents([]);
+    setSelectedStudentId("");
     setLoading(true);
     const result = await lookupStudentByParentPhone(phone);
     setLoading(false);
-    if (!result.success || !result.data) {
+    if (!result.success || !result.data?.length) {
       setError(result.error ?? "등록된 재원생 정보를 찾을 수 없습니다.");
       return;
     }
-    setFound(result.data);
+    setFoundStudents(result.data);
+    setSelectedStudentId(result.data[0]?.id ?? "");
   }
 
   async function handleReserve() {
-    if (!found) return;
+    if (!selectedStudent) return;
     setError("");
     setReserving(true);
     const result = await onDone(
-      found,
+      selectedStudent,
       session.attendeeCountEnabled ? attendeeCount : undefined,
     );
     setReserving(false);
@@ -520,7 +527,8 @@ function EnrolledStep({
             onChange={(e) => {
               setPhone(formatPhoneNumber(e.target.value));
               setError("");
-              setFound(null);
+              setFoundStudents([]);
+              setSelectedStudentId("");
             }}
             placeholder="010-0000-0000"
             className="w-full rounded-lg border border-input px-3 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring"
@@ -534,19 +542,13 @@ function EnrolledStep({
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
         )}
 
-        {found ? (
-          <div className="rounded-xl border border-success/30 bg-success/10 p-4">
-            <div className="flex items-start gap-2">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success/15 text-xs text-success">
-                ✓
-              </span>
-              <div>
-                <span className="text-sm font-semibold text-foreground">{found.name}</span>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {found.school} · {found.grade} · {found.className}
-                </p>
-              </div>
-            </div>
+        {foundStudents.length > 0 ? (
+          <div>
+            <StudentLookupResultList
+              students={foundStudents}
+              selectedStudentId={selectedStudentId}
+              onSelect={setSelectedStudentId}
+            />
             {session.attendeeCountEnabled && (
               <AttendeeCountField
                 value={attendeeCount}
@@ -556,11 +558,11 @@ function EnrolledStep({
             )}
             <button
               type="button"
-              disabled={reserving}
+              disabled={reserving || !selectedStudent}
               onClick={handleReserve}
               className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
-              {reserving ? "예약 중..." : "이 정보로 예약하기"}
+              {reserving ? "예약 중..." : "선택한 학생으로 예약하기"}
             </button>
           </div>
         ) : (

@@ -30,6 +30,7 @@ export type ReservationStudent = {
 export type ReservationInput = {
   eventId: string;
   path: ReservationPath;
+  studentId?: string;
   name: string;
   phone: string;
   school?: string;
