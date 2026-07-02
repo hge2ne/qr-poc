@@ -1,5 +1,6 @@
 import { SolapiMessageService } from "solapi";
 import { normalizePhoneNumber } from "@/lib/phone";
+import { toShortQrUrl, toShortReservationUrl } from "@/lib/appUrls";
 
 export type SmsSendStatus = "sent" | "skipped" | "failed";
 
@@ -150,16 +151,20 @@ async function sendSms(to: string, body: string): Promise<SmsSendResult> {
 export async function sendReservationSuccessSms(
   input: ReservationSmsInput,
 ): Promise<SmsSendResult> {
+  const reservationUrl = input.reservationUrl
+    ? toShortReservationUrl(input.reservationUrl)
+    : undefined;
+  const qrUrl = input.qrUrl ? toShortQrUrl(input.qrUrl) : undefined;
   const body = [
     `[${SMS_EVENT_BRAND} 예약 완료]`,
     `${input.studentName} 학생 예약이 완료되었습니다.`,
     `설명회: ${input.eventTitle}`,
     `설명회 일시: ${input.eventDateText}`,
     `장소: ${input.location}`,
-    input.reservationUrl ? `예약 확인 URL` : undefined,
-    input.reservationUrl,
-    input.qrUrl ? `입장 QR URL` : undefined,
-    input.qrUrl,
+    reservationUrl ? `예약 확인 URL` : undefined,
+    reservationUrl,
+    qrUrl ? `입장 QR URL` : undefined,
+    qrUrl,
     `설명회 당일 입장 시 입장 QR 링크를 제시해 주세요.`,
   ]
     .filter(Boolean)
