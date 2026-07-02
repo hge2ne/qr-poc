@@ -44,7 +44,7 @@ export default async function ReservationDetailPage({
           </p>
           <div className="mt-2 flex items-start justify-between gap-3">
             <h1 className="text-xl font-bold leading-tight text-foreground">
-              예약 상세
+              {isCancelled ? "예약 취소 내역" : "예약이 완료되었습니다"}
             </h1>
             <span
               className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
@@ -57,7 +57,7 @@ export default async function ReservationDetailPage({
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            예약 정보와 현장 입장 QR을 확인할 수 있습니다.
+            예약 정보와 현장 입장 QR을 이 화면에서 계속 확인할 수 있습니다.
           </p>
 
           <div className="mt-5 space-y-2">

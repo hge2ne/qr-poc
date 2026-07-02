@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { buildQrUrl } from "@/lib/appUrls";
 import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
 import { sendReservationSuccessSms } from "@/lib/sms";
@@ -15,12 +16,6 @@ async function requireAdmin() {
     throw new Error("관리자 권한이 필요합니다.");
   }
   return session;
-}
-
-function buildQrUrl(qrToken: string): string {
-  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-  const baseUrl = process.env.BASE_URL || (vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000");
-  return `${baseUrl.replace(/\/$/, "")}/verify/${qrToken}`;
 }
 
 function formatEventDateText(date: Date): string {

@@ -2,7 +2,16 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { redirect, RedirectType } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import {
+  buildQrUrl,
+  buildReservationDetailPath,
+  buildReservationUrl,
+  buildShortReservationUrl,
+  getBaseUrl,
+  toShortReservationUrl,
+} from "@/lib/appUrls";
 import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
 import { sendReservationSuccessSms } from "@/lib/sms";
@@ -34,23 +43,11 @@ type EventWithCounts = {
 
 const DEFAULT_ROUND = "신규 회차";
 
-function getBaseUrl(): string {
-  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-  const baseUrl = process.env.BASE_URL || (vercelUrl ? `https://${vercelUrl}` : "http://localhost:3000");
-  return baseUrl.replace(/\/$/, "");
-}
-
-function buildQrUrl(qrToken: string): string {
-  return `${getBaseUrl()}/verify/${qrToken}`;
-}
-
-function buildReservationUrl(reservationId: string): string {
-  return `${getBaseUrl()}/reserve/${reservationId}`;
-}
-
 function displayReservationUrl(reservationId: string, reservationUrl: string): string {
-  if (reservationUrl.startsWith("/")) return `${getBaseUrl()}${reservationUrl}`;
-  return reservationUrl || buildReservationUrl(reservationId);
+  const absoluteUrl = reservationUrl.startsWith("/")
+    ? `${getBaseUrl()}${reservationUrl}`
+    : reservationUrl || buildReservationUrl(reservationId);
+  return toShortReservationUrl(absoluteUrl);
 }
 
 function normalizePhone(phone: string): string {
@@ -339,7 +336,7 @@ export async function createReservation(
         grade,
         className: className || null,
         attendeeCount,
-        reservationUrl: buildReservationUrl(reservationId),
+        reservationUrl: buildShortReservationUrl(reservationId),
       },
       include: { event: true },
     });
@@ -398,6 +395,18 @@ export async function createReservation(
       smsStatus: sms.status,
     },
   };
+}
+
+export async function createReservationAndRedirect(
+  input: ReservationInput
+): Promise<ActionResult<ReservationMutationData>> {
+  const result = await createReservation(input);
+  if (!result.success || !result.data) return result;
+
+  redirect(
+    buildReservationDetailPath(result.data.reservation.id),
+    RedirectType.replace,
+  );
 }
 
 export async function findReservationsByContact(data: {

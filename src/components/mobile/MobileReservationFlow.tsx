@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { createReservation, lookupStudentByParentPhone } from "@/actions/reservations";
+import {
+  createReservation,
+  createReservationAndRedirect,
+  lookupStudentByParentPhone,
+} from "@/actions/reservations";
 import type {
   ReservationInput,
   ReservationSession,
@@ -95,7 +99,9 @@ export function MobileReservationFlow({
   }
 
   async function completeReservation(input: ReservationInput): Promise<ActionResult<Completed>> {
-    const result = await createReservation(input);
+    const result = await (embeddedCheck
+      ? createReservation(input)
+      : createReservationAndRedirect(input));
     if (!result.success || !result.data) {
       return { success: false, error: result.error ?? "예약에 실패했습니다." };
     }
