@@ -1,13 +1,28 @@
 "use client";
 
-import { useRef } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import { useRef, type CSSProperties } from "react";
+import { QRCodeCanvas } from "qrcode.react";
 
 type Props = {
   value: string;
   size?: number;
   downloadName?: string;
 };
+
+const MIN_RENDER_SIZE = 224;
+const QR_FOREGROUND = "#000000";
+const QR_BACKGROUND = "#ffffff";
+
+const qrSurfaceStyle = {
+  colorScheme: "only light",
+  forcedColorAdjust: "none",
+} satisfies CSSProperties;
+
+const qrCanvasStyle = {
+  display: "block",
+  imageRendering: "pixelated",
+  backgroundColor: QR_BACKGROUND,
+} satisfies CSSProperties;
 
 function decodePathSegment(segment: string): string {
   try {
@@ -39,45 +54,26 @@ function getCompactQrValue(value: string): string {
 }
 
 export function QRCodeDisplay({ value, size = 256, downloadName = "qr-code" }: Props) {
-  const svgRef = useRef<SVGSVGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const qrValue = getCompactQrValue(value);
+  const renderSize = Math.max(size, MIN_RENDER_SIZE);
 
   const handleDownload = () => {
-    const svg = svgRef.current;
-    if (!svg) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(svg);
-    const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
-    const objectUrl = URL.createObjectURL(blob);
-    const image = new Image();
+    canvas.toBlob((blob) => {
+      if (!blob) return;
 
-    image.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const context = canvas.getContext("2d");
-      if (!context) {
-        URL.revokeObjectURL(objectUrl);
-        return;
-      }
-
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, size, size);
-      context.drawImage(image, 0, 0, size, size);
-
-      const url = canvas.toDataURL("image/png");
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${downloadName}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(objectUrl);
-    };
-
-    image.onerror = () => URL.revokeObjectURL(objectUrl);
-    image.src = objectUrl;
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }, "image/png");
   };
 
   const handleCopy = async () => {
@@ -87,13 +83,21 @@ export function QRCodeDisplay({ value, size = 256, downloadName = "qr-code" }: P
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="p-4 bg-card rounded-xl border border-border shadow-sm">
-        <QRCodeSVG
-          ref={svgRef}
+      <div
+        className="p-4 bg-white rounded-xl border border-border shadow-sm"
+        style={qrSurfaceStyle}
+      >
+        <QRCodeCanvas
+          ref={canvasRef}
           value={qrValue}
-          size={size}
-          level="H"
+          size={renderSize}
+          level="M"
           marginSize={4}
+          fgColor={QR_FOREGROUND}
+          bgColor={QR_BACKGROUND}
+          boostLevel={false}
+          aria-label="입장 QR 코드"
+          style={qrCanvasStyle}
         />
       </div>
       <p className="text-xs text-muted-foreground break-all text-center max-w-xs">{value}</p>
