@@ -48,6 +48,20 @@ async function stopScanner(scanner: Html5Qrcode) {
   }
 }
 
+function getCameraErrorMessage(error: unknown) {
+  if (error instanceof DOMException) {
+    if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+      return "카메라 권한을 허용한 뒤 다시 요청해 주세요.";
+    }
+
+    if (error.name === "NotFoundError" || error.name === "OverconstrainedError") {
+      return "전면 카메라를 찾을 수 없습니다.";
+    }
+  }
+
+  return "카메라 권한 또는 전면 카메라 상태를 확인해 주세요.";
+}
+
 export function QRScanner({ onScan }: Props) {
   const generatedId = useId();
   const previewId = `qr-preview-${generatedId.replaceAll(":", "")}`;
@@ -59,6 +73,7 @@ export function QRScanner({ onScan }: Props) {
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [torchChanging, setTorchChanging] = useState(false);
+  const [startAttempt, setStartAttempt] = useState(0);
 
   useEffect(() => {
     onScanRef.current = onScan;
@@ -69,6 +84,11 @@ export function QRScanner({ onScan }: Props) {
 
     async function startScanner() {
       try {
+        setStatus("loading");
+        setErrorMsg("");
+        setTorchSupported(false);
+        setTorchOn(false);
+
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
         if (cancelled) return;
 
@@ -113,10 +133,17 @@ export function QRScanner({ onScan }: Props) {
         }
 
         setStatus("active");
-      } catch {
+      } catch (error) {
         if (!cancelled) {
+          const scanner = scannerRef.current;
+          scannerRef.current = null;
+          torchCapabilityRef.current = null;
+          setTorchSupported(false);
+          setTorchOn(false);
+          if (scanner) await stopScanner(scanner);
+
           setStatus("error");
-          setErrorMsg("카메라 접근 권한을 허용해 주세요.");
+          setErrorMsg(getCameraErrorMessage(error));
         }
       }
     }
@@ -132,7 +159,7 @@ export function QRScanner({ onScan }: Props) {
       setTorchOn(false);
       if (scanner) void stopScanner(scanner);
     };
-  }, [previewId]);
+  }, [previewId, startAttempt]);
 
   const handleToggleTorch = useCallback(async () => {
     const torchCapability = torchCapabilityRef.current;
@@ -150,6 +177,10 @@ export function QRScanner({ onScan }: Props) {
       setTorchChanging(false);
     }
   }, [torchChanging, torchOn]);
+
+  const handleRetryCamera = useCallback(() => {
+    setStartAttempt((attempt) => attempt + 1);
+  }, []);
 
   return (
     <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
@@ -173,6 +204,13 @@ export function QRScanner({ onScan }: Props) {
           <span className="text-4xl">📷</span>
           <p className="text-white font-medium">카메라 권한 필요</p>
           <p className="text-white/60 text-sm text-center">{errorMsg}</p>
+          <button
+            type="button"
+            onClick={handleRetryCamera}
+            className="mt-3 rounded-lg bg-white px-4 py-2 text-xs font-semibold text-black shadow-sm transition-colors hover:bg-white/90"
+          >
+            카메라 다시 요청
+          </button>
         </div>
       )}
 
