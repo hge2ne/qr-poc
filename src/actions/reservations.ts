@@ -362,7 +362,7 @@ export async function createReservation(
     });
 
     const session = toReservationSession(event, reserved + attendeeCount);
-    revalidatePath("/reserve");
+    // Revalidating /reserve here refreshes the active mobile flow and clears the completion screen.
     revalidatePath("/reserve/check");
     revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
