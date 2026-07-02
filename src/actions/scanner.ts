@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { recordEntryError } from "@/lib/entryLogs";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
+import { sendEntryConfirmedSms } from "@/lib/sms";
 import type { ActionResult } from "./types";
 import type {
   ScannerEntryEvent,
@@ -262,7 +263,7 @@ export async function enterReservedReservationFromScanner(
     return { success: false, error };
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction<ActionResult<ScannerEntryResult>>(async (tx) => {
     const reservation = await tx.reservation.findUnique({
       where: { id },
       include: { attendee: true, event: true },
@@ -374,6 +375,17 @@ export async function enterReservedReservationFromScanner(
       }),
     };
   });
+
+  if (result.success && result.data && !result.data.alreadyEntered) {
+    await sendEntryConfirmedSms({
+      to: result.data.phone,
+      attendeeName: result.data.attendeeName,
+      eventTitle: result.data.eventTitle,
+      enteredAt: new Date(result.data.enteredAt),
+    });
+  }
+
+  return result;
 }
 
 export async function enterUnreservedStudentFromScanner(data: {
@@ -393,7 +405,7 @@ export async function enterUnreservedStudentFromScanner(data: {
     return { success: false, error };
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction<ActionResult<ScannerEntryResult>>(async (tx) => {
     const [student, event] = await Promise.all([
       tx.student.findFirst({
         where: { id: studentId, isActive: true },
@@ -490,4 +502,15 @@ export async function enterUnreservedStudentFromScanner(data: {
       }),
     };
   });
+
+  if (result.success && result.data && !result.data.alreadyEntered) {
+    await sendEntryConfirmedSms({
+      to: result.data.phone,
+      attendeeName: result.data.attendeeName,
+      eventTitle: result.data.eventTitle,
+      enteredAt: new Date(result.data.enteredAt),
+    });
+  }
+
+  return result;
 }

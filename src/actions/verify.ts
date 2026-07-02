@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { recordEntryError } from "@/lib/entryLogs";
 import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
+import { sendEntryConfirmedSms } from "@/lib/sms";
 import type { ActionResult } from "./types";
 
 function getBaseUrl(): string {
@@ -162,6 +163,13 @@ export async function verifyQRToken(token: string, expectedEventId?: string): Pr
   revalidatePath("/phone-reservations");
   revalidatePath(`/events/${updated.eventId}`);
   revalidatePath("/scanner");
+
+  await sendEntryConfirmedSms({
+    to: updated.phone,
+    attendeeName: updated.name,
+    eventTitle: updated.event.title,
+    enteredAt: updated.enteredAt!,
+  });
 
   return {
     success: true,
