@@ -60,4 +60,5 @@ export type ReservationMutationData = {
   reservation: StoredReservation;
   session: ReservationSession;
   smsStatus?: SmsDeliveryStatus;
+  smsError?: string;
 };

@@ -15,6 +15,7 @@ type CreatedResult = {
   name: string;
   qrUrl?: string;
   smsStatus?: SmsDeliveryStatus;
+  smsError?: string;
 };
 
 type PhoneManualReservationFormProps = {
@@ -71,9 +72,13 @@ export function PhoneManualReservationForm({
   const selectedStudent =
     foundStudents.find((student) => student.id === selectedStudentId) ?? null;
 
-  function getSmsNotice(status?: SmsDeliveryStatus) {
+  function getSmsNotice(status?: SmsDeliveryStatus, error?: string) {
     if (status === "sent") return "예약 완료 문자를 학부모 연락처로 발송했습니다.";
-    if (status === "failed") return "예약은 완료됐지만 문자 발송에 실패했습니다.";
+    if (status === "failed") {
+      return error
+        ? `예약은 완료됐지만 문자 발송에 실패했습니다. 사유: ${error}`
+        : "예약은 완료됐지만 문자 발송에 실패했습니다.";
+    }
     return "문자 발송 설정이 완료되면 학부모 연락처로 예약 안내가 발송됩니다.";
   }
 
@@ -132,6 +137,7 @@ export function PhoneManualReservationForm({
         name: selectedStudent.name,
         qrUrl: result.data.reservation.qrUrl,
         smsStatus: result.data.smsStatus,
+        smsError: result.data.smsError,
       });
     } catch {
       setError("예약에 실패했습니다.");
@@ -169,6 +175,7 @@ export function PhoneManualReservationForm({
         name,
         qrUrl: result.data.reservation.qrUrl,
         smsStatus: result.data.smsStatus,
+        smsError: result.data.smsError,
       });
     } catch {
       setError("예약에 실패했습니다.");
@@ -184,7 +191,9 @@ export function PhoneManualReservationForm({
           <span className="text-xl text-success">✓</span>
         </div>
         <h2 className="mb-1 text-lg font-bold text-foreground">{created.name} 님 예약 완료</h2>
-        <p className="mb-6 text-sm text-muted-foreground">{getSmsNotice(created.smsStatus)}</p>
+        <p className="mb-6 text-sm text-muted-foreground">
+          {getSmsNotice(created.smsStatus, created.smsError)}
+        </p>
         {created.qrUrl && (
           <QRCodeDisplay value={created.qrUrl} size={220} downloadName={`${created.name}_QR`} />
         )}

@@ -43,6 +43,7 @@ type Completed = {
   reservationUrl: string;
   qrUrl?: string;
   smsStatus?: SmsDeliveryStatus;
+  smsError?: string;
 };
 
 type MobileReservationFlowProps = {
@@ -120,6 +121,7 @@ export function MobileReservationFlow({
       reservationUrl: reservation.reservationUrl,
       qrUrl: reservation.qrUrl,
       smsStatus: result.data.smsStatus,
+      smsError: result.data.smsError,
     };
 
     setSessions((current) =>
@@ -793,7 +795,11 @@ function DoneStep({
         />
       </div>
 
-      <SmsNotice status={completed.smsStatus} phone={completed.phone} />
+      <SmsNotice
+        status={completed.smsStatus}
+        phone={completed.phone}
+        error={completed.smsError}
+      />
 
       <div className="mt-4 w-full rounded-xl border border-info/30 bg-info-bg px-4 py-3 text-left">
         <p className="text-sm font-semibold text-info-bg-foreground">예약 상세 URL</p>
@@ -852,9 +858,11 @@ function DoneStep({
 function SmsNotice({
   status,
   phone,
+  error,
 }: {
   status?: SmsDeliveryStatus;
   phone: string;
+  error?: string;
 }) {
   const sent = status === "sent";
   const failed = status === "failed";
@@ -878,7 +886,9 @@ function SmsNotice({
         {sent
           ? `${phone} 번호로 예약 URL과 입장 QR URL을 문자로 발송했습니다.`
           : failed
-            ? "문자 발송을 완료하지 못했습니다. 아래 예약 URL과 입장 QR을 저장해 주세요."
+            ? error
+              ? `문자 발송을 완료하지 못했습니다. 사유: ${error}`
+              : "문자 발송을 완료하지 못했습니다. 아래 예약 URL과 입장 QR을 저장해 주세요."
             : "문자 발송 설정이 완료되면 예약 URL과 입장 QR URL이 학부모 연락처로 발송됩니다."}
       </p>
     </div>

@@ -17,6 +17,7 @@ type CreatedResult = {
   qrToken: string;
   qrUrl: string;
   smsStatus?: SmsDeliveryStatus;
+  smsError?: string;
   name: string;
 };
 
@@ -72,9 +73,13 @@ export function AttendeeRegistrationForm({
   const selectedStudent =
     foundStudents.find((student) => student.id === selectedStudentId) ?? null;
 
-  function getSmsNotice(status?: SmsDeliveryStatus) {
+  function getSmsNotice(status?: SmsDeliveryStatus, error?: string) {
     if (status === "sent") return "입장 QR 안내 문자를 학부모 연락처로 발송했습니다.";
-    if (status === "failed") return "문자 발송을 완료하지 못했습니다. QR 코드를 직접 전달해 주세요.";
+    if (status === "failed") {
+      return error
+        ? `문자 발송을 완료하지 못했습니다. 사유: ${error}`
+        : "문자 발송을 완료하지 못했습니다. QR 코드를 직접 전달해 주세요.";
+    }
     return "문자 발송 설정이 완료되면 학부모 연락처로 입장 QR 안내가 발송됩니다.";
   }
 
@@ -159,7 +164,9 @@ export function AttendeeRegistrationForm({
           <span className="text-xl text-success">✓</span>
         </div>
         <h2 className="mb-1 text-lg font-bold text-foreground">{created.name} 님 등록 완료</h2>
-        <p className="mb-6 text-sm text-muted-foreground">{getSmsNotice(created.smsStatus)}</p>
+        <p className="mb-6 text-sm text-muted-foreground">
+          {getSmsNotice(created.smsStatus, created.smsError)}
+        </p>
         <QRCodeDisplay value={created.qrUrl} size={220} downloadName={`${created.name}_QR`} />
         <div className="mt-6 flex gap-2">
           <button

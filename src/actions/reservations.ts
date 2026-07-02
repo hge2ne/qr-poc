@@ -421,6 +421,7 @@ async function createReservationWithSource(
     data: {
       ...result.data,
       smsStatus: sms.status,
+      smsError: sms.error,
     },
   };
 }

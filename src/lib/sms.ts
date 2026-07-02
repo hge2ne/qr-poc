@@ -33,6 +33,36 @@ type EntrySmsInput = {
   enteredAt: Date;
 };
 
+type SolapiMessageReceipt = {
+  messageId?: unknown;
+  to?: unknown;
+  from?: unknown;
+  statusCode?: unknown;
+  statusMessage?: unknown;
+};
+
+type SolapiSendResponse = {
+  failedMessageList?: unknown;
+  messageList?: unknown;
+  groupId?: unknown;
+  groupInfo?: {
+    groupId?: unknown;
+    count?: {
+      total?: unknown;
+      registeredFailed?: unknown;
+      registeredSuccess?: unknown;
+    };
+  };
+};
+
+type SolapiSendError = {
+  errorCode?: unknown;
+  errorMessage?: unknown;
+  message?: unknown;
+  failedMessageList?: unknown;
+  validationErrors?: unknown;
+};
+
 const SMS_EVENT_BRAND = "늘푸른 수학원 설명회";
 const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "y", "on"]);
 const FALSY_ENV_VALUES = new Set(["0", "false", "no", "n", "off"]);
@@ -128,6 +158,12 @@ function toSolapiPhoneNumber(phone: string): string {
   return digits;
 }
 
+function maskPhoneNumber(phone: string): string {
+  const digits = normalizePhoneNumber(phone);
+  if (digits.length < 7) return "(invalid)";
+  return `${digits.slice(0, 3)}****${digits.slice(-4)}`;
+}
+
 function getTestRecipientSet(): Set<string> | null {
   if (!shouldRestrictToTestRecipients()) return null;
 
@@ -159,15 +195,79 @@ function formatKoreanDateTime(date: Date): string {
 function getSolapiMessageId(response: unknown): string | undefined {
   if (!response || typeof response !== "object") return undefined;
 
-  const data = response as {
-    groupId?: unknown;
+  const data = response as SolapiSendResponse & {
     messageId?: unknown;
     message?: { messageId?: unknown };
   };
   if (typeof data.messageId === "string") return data.messageId;
   if (typeof data.groupId === "string") return data.groupId;
+  if (typeof data.groupInfo?.groupId === "string") return data.groupInfo.groupId;
   if (typeof data.message?.messageId === "string") return data.message.messageId;
+  const [messageReceipt] = getSolapiReceipts(data.messageList);
+  if (typeof messageReceipt?.messageId === "string") return messageReceipt.messageId;
   return undefined;
+}
+
+function getSolapiReceipts(value: unknown): SolapiMessageReceipt[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is SolapiMessageReceipt => (
+    Boolean(item) && typeof item === "object"
+  ));
+}
+
+function getSolapiStatusMessage(receipt: SolapiMessageReceipt): string {
+  const statusCode = typeof receipt.statusCode === "string" ? receipt.statusCode : "";
+  const statusMessage = typeof receipt.statusMessage === "string" ? receipt.statusMessage : "";
+  return [statusCode, statusMessage].filter(Boolean).join(" ");
+}
+
+function getSolapiResponseFailure(response: unknown): string | null {
+  if (!response || typeof response !== "object") return null;
+
+  const data = response as SolapiSendResponse;
+  const [failedReceipt] = getSolapiReceipts(data.failedMessageList);
+  if (failedReceipt) {
+    return getSolapiStatusMessage(failedReceipt) || "SOLAPI rejected the message.";
+  }
+
+  const total = Number(data.groupInfo?.count?.total ?? 0);
+  const registeredSuccess = Number(data.groupInfo?.count?.registeredSuccess ?? 0);
+  const registeredFailed = Number(data.groupInfo?.count?.registeredFailed ?? 0);
+  if (total > 0 && registeredSuccess === 0 && registeredFailed > 0) {
+    const [messageReceipt] = getSolapiReceipts(data.messageList);
+    return messageReceipt
+      ? getSolapiStatusMessage(messageReceipt) || "SOLAPI rejected the message."
+      : "SOLAPI rejected the message.";
+  }
+
+  return null;
+}
+
+function getSolapiErrorMessage(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return error instanceof Error ? error.message : "SMS provider request failed.";
+  }
+
+  const data = error as SolapiSendError;
+  const [failedReceipt] = getSolapiReceipts(data.failedMessageList);
+  if (failedReceipt) {
+    return getSolapiStatusMessage(failedReceipt) || "SOLAPI rejected the message.";
+  }
+
+  const errorCode = typeof data.errorCode === "string" ? data.errorCode : "";
+  const errorMessage = typeof data.errorMessage === "string"
+    ? data.errorMessage
+    : typeof data.message === "string"
+      ? data.message
+      : "";
+  const validationErrors = Array.isArray(data.validationErrors)
+    ? data.validationErrors.filter((value): value is string => typeof value === "string")
+    : [];
+
+  return [
+    [errorCode, errorMessage].filter(Boolean).join(" "),
+    validationErrors.join(", "),
+  ].filter(Boolean).join(" / ") || "SMS provider request failed.";
 }
 
 async function sendSms(to: string, body: string): Promise<SmsSendResult> {
@@ -183,7 +283,7 @@ async function sendSms(to: string, body: string): Promise<SmsSendResult> {
 
   const testRecipientError = getBlockedByTestRecipientError(recipient);
   if (testRecipientError) {
-    console.warn(`[sms] SOLAPI send skipped: ${testRecipientError} recipient=${recipient}`);
+    console.warn(`[sms] SOLAPI send skipped: ${testRecipientError} recipient=${maskPhoneNumber(recipient)}`);
     return { status: "skipped", error: testRecipientError };
   }
 
@@ -194,12 +294,26 @@ async function sendSms(to: string, body: string): Promise<SmsSendResult> {
       from: config.sender,
       text: body,
       autoTypeDetect: true,
+    }, {
+      showMessageList: true,
     });
+
+    const responseFailure = getSolapiResponseFailure(response);
+    if (responseFailure) {
+      console.error(
+        `[sms] SOLAPI send rejected: recipient=${maskPhoneNumber(recipient)} reason=${responseFailure}`,
+      );
+      return { status: "failed", error: responseFailure };
+    }
 
     return { status: "sent", messageId: getSolapiMessageId(response) };
   } catch (error) {
-    console.error("[sms] SOLAPI send failed:", error);
-    return { status: "failed", error: "SMS provider request failed." };
+    const providerError = getSolapiErrorMessage(error);
+    console.error(
+      `[sms] SOLAPI send failed: recipient=${maskPhoneNumber(recipient)} reason=${providerError}`,
+      error,
+    );
+    return { status: "failed", error: providerError };
   }
 }
 

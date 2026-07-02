@@ -45,7 +45,13 @@ export async function createAttendee(data: {
   grade?: string;
   className?: string;
   attendeeCount?: number;
-}): Promise<ActionResult<{ id: string; qrToken: string; qrUrl: string; smsStatus?: SmsDeliveryStatus }>> {
+}): Promise<ActionResult<{
+  id: string;
+  qrToken: string;
+  qrUrl: string;
+  smsStatus?: SmsDeliveryStatus;
+  smsError?: string;
+}>> {
   await requireAdmin();
   const attendeeCount =
     Number.isInteger(data.attendeeCount) && data.attendeeCount! > 0 ? data.attendeeCount! : 1;
@@ -97,7 +103,13 @@ export async function createAttendee(data: {
 
   return {
     success: true,
-    data: { id: attendee.id, qrToken: attendee.qrToken, qrUrl, smsStatus: sms.status },
+    data: {
+      id: attendee.id,
+      qrToken: attendee.qrToken,
+      qrUrl,
+      smsStatus: sms.status,
+      smsError: sms.error,
+    },
   };
 }
 
