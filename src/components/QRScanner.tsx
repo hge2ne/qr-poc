@@ -187,7 +187,7 @@ export function QRScanner({ onScan }: Props) {
       {/* html5-qrcode 가 여기에 video 엘리먼트를 주입합니다 */}
       <div
         id={previewId}
-        className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
+        className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:-scale-x-100"
       />
 
       {/* 로딩 오버레이 */}

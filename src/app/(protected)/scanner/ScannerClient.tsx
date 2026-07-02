@@ -119,6 +119,7 @@ function extractTokenFromPath(path: string): string {
 
   for (const prefix of ["verify", "q"]) {
     const index = segments.lastIndexOf(prefix);
+    if (index === -1) continue;
     const token = segments[index + 1]?.trim();
     if (token) return token;
   }
