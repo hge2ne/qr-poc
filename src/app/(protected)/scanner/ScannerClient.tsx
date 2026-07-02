@@ -29,7 +29,11 @@ const SCANNER_EVENT_CHANGE_EVENT = "scanner-event-change";
 
 function detectDevice(): string {
   const ua = navigator.userAgent;
-  if (/iPad/.test(ua)) return "iPad";
+  // iPadOS 13+ Safari 는 데스크톱 모드가 기본이라 userAgent 가 Macintosh 로 보고됩니다.
+  // 실제 Mac 은 maxTouchPoints 가 0, iPad 는 5 이상이므로 터치 지원으로 구분합니다.
+  const isIPad =
+    /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (isIPad) return "iPad";
   if (/iPhone/.test(ua)) return "iPhone";
   if (/Android.*Mobile/i.test(ua)) return "Android 폰";
   if (/Android/i.test(ua)) return "Android 태블릿";
