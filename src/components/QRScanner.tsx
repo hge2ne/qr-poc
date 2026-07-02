@@ -14,15 +14,14 @@ type TorchCapability = {
   value: () => boolean | null;
 };
 
-const PREFERRED_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { ideal: "environment" },
+const CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: "environment",
+};
+
+const CAMERA_QUALITY_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: 1920 },
   height: { ideal: 1080 },
   frameRate: { ideal: 30, max: 30 },
-};
-
-const FALLBACK_CAMERA_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: "environment",
 };
 
 const SCAN_CONFIG: Html5QrcodeCameraScanConfig = {
@@ -80,26 +79,23 @@ export function QRScanner({ onScan }: Props) {
         });
         scannerRef.current = scanner;
 
-        try {
-          await scanner.start(
-            PREFERRED_CAMERA_CONSTRAINTS,
-            SCAN_CONFIG,
-            (text) => onScanRef.current(text),
-            () => {}
-          );
-        } catch {
-          if (cancelled) return;
-          await scanner.start(
-            FALLBACK_CAMERA_CONSTRAINTS,
-            SCAN_CONFIG,
-            (text) => onScanRef.current(text),
-            () => {}
-          );
-        }
+        await scanner.start(
+          CAMERA_START_CONSTRAINTS,
+          SCAN_CONFIG,
+          (text) => onScanRef.current(text),
+          () => {}
+        );
 
         if (cancelled) {
           await stopScanner(scanner);
           return;
+        }
+
+        try {
+          await scanner.applyVideoConstraints(CAMERA_QUALITY_CONSTRAINTS);
+        } catch {
+          // Some Android WebViews reject quality upgrades after permission.
+          // Keep the scanner running with the browser-selected camera settings.
         }
 
         try {
