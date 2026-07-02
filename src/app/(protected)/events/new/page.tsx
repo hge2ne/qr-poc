@@ -58,8 +58,8 @@ export default function NewEventPage() {
   return (
     <div className="max-w-lg">
       <div className="flex items-center gap-2 mb-6">
-        <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-muted-foreground">
-          대시보드
+        <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
+          QR 운영
         </Link>
         <span className="text-input">/</span>
         <span className="text-sm text-foreground font-medium">새 설명회</span>

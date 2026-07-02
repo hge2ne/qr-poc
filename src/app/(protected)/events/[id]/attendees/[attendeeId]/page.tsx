@@ -16,9 +16,9 @@ export default async function AttendeeDetailPage({
   return (
     <div className="max-w-lg">
       <div className="flex items-center gap-2 mb-6">
-        <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-muted-foreground">대시보드</Link>
+        <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">QR 운영</Link>
         <span className="text-input">/</span>
-        <Link href={`/events/${eventId}`} className="text-sm text-muted-foreground hover:text-muted-foreground">
+        <Link href={`/events/${eventId}`} className="text-sm text-muted-foreground hover:text-foreground">
           {attendee.event.title}
         </Link>
         <span className="text-input">/</span>

@@ -14,6 +14,10 @@ async function requireAdmin() {
   return session;
 }
 
+function sumSeats(items: { attendeeCount: number }[]) {
+  return items.reduce((sum, item) => sum + item.attendeeCount, 0);
+}
+
 export async function createEvent(data: {
   title: string;
   date: string;
@@ -43,6 +47,7 @@ export async function createEvent(data: {
     },
   });
   revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
   return { success: true, data: { id: event.id } };
 }
@@ -80,17 +85,41 @@ export async function getEvents() {
 
 export async function getEvent(id: string) {
   await requireAdmin();
-  const event = await prisma.event.findUnique({
-    where: { id },
-    include: {
-      attendees: { orderBy: { createdAt: "asc" } },
-      reservations: {
-        where: { status: "RESERVED" },
-        select: { attendeeCount: true },
+  const [event, activeStudentCount] = await Promise.all([
+    prisma.event.findUnique({
+      where: { id },
+      include: {
+        attendees: { orderBy: { createdAt: "asc" } },
+        reservations: {
+          select: {
+            status: true,
+            attendeeCount: true,
+            attendee: { select: { status: true } },
+          },
+        },
+        entryLogs: {
+          where: { status: "ERROR" },
+          select: { id: true },
+        },
       },
-    },
-  });
+    }),
+    prisma.student.count({ where: { isActive: true } }),
+  ]);
   if (!event) return null;
+
+  const activeReservations = event.reservations.filter(
+    (reservation) => reservation.status === "RESERVED"
+  );
+  const checkedInCount = event.attendees
+    .filter((attendee) => attendee.status === "ENTERED")
+    .reduce((sum, attendee) => sum + attendee.attendeeCount, 0);
+  const uncheckedReservationCount = activeReservations
+    .filter((reservation) => reservation.attendee?.status !== "ENTERED")
+    .reduce((sum, reservation) => sum + reservation.attendeeCount, 0);
+  const manualCheckCount = event.attendees
+    .filter((attendee) => attendee.reservationId === null && attendee.status === "ENTERED")
+    .reduce((sum, attendee) => sum + attendee.attendeeCount, 0);
+
   return {
     id: event.id,
     title: event.title,
@@ -103,7 +132,14 @@ export async function getEvent(id: string) {
     reservationStatus: event.reservationStatus,
     attendeeCountEnabled: event.attendeeCountEnabled,
     attendeeCountMax: event.attendeeCountMax,
-    reservedCount: event.reservations.reduce((sum, reservation) => sum + reservation.attendeeCount, 0),
+    reservedCount: sumSeats(activeReservations),
+    metrics: {
+      capacityCount: activeStudentCount,
+      checkedInCount,
+      uncheckedReservationCount,
+      manualCheckCount,
+      errorCount: event.entryLogs.length,
+    },
     attendees: event.attendees.map((a: typeof event.attendees[number]) => ({
       id: a.id,
       name: a.name,
@@ -118,6 +154,98 @@ export async function getEvent(id: string) {
       attendeeCount: a.attendeeCount,
       enteredAt: a.enteredAt?.toISOString() ?? null,
       createdAt: a.createdAt.toISOString(),
+    })),
+  };
+}
+
+export async function getEventOptions() {
+  await requireAdmin();
+  const events = await prisma.event.findMany({
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      campus: true,
+      round: true,
+      location: true,
+    },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+  });
+
+  return events.map((event) => ({
+    id: event.id,
+    title: event.title,
+    date: event.date.toISOString(),
+    campus: event.campus,
+    round: event.round,
+    location: event.location,
+  }));
+}
+
+export async function getPhoneReservationDashboard(eventId: string) {
+  await requireAdmin();
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      reservations: {
+        include: {
+          attendee: {
+            select: {
+              id: true,
+              status: true,
+              enteredAt: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!event) return null;
+
+  const activeReservations = event.reservations.filter(
+    (reservation) => reservation.status === "RESERVED"
+  );
+  const enteredReservations = activeReservations.filter(
+    (reservation) => reservation.attendee?.status === "ENTERED"
+  );
+  const uncheckedReservations = activeReservations.filter(
+    (reservation) => reservation.attendee?.status !== "ENTERED"
+  );
+  const cancelledReservations = event.reservations.filter(
+    (reservation) => reservation.status === "CANCELLED"
+  );
+
+  return {
+    event: {
+      id: event.id,
+      title: event.title,
+      date: event.date.toISOString(),
+      campus: event.campus,
+      round: event.round,
+      location: event.location,
+    },
+    metrics: {
+      phoneReservationCount: sumSeats(activeReservations),
+      enteredCount: sumSeats(enteredReservations),
+      uncheckedCount: sumSeats(uncheckedReservations),
+      cancelledCount: sumSeats(cancelledReservations),
+    },
+    reservations: event.reservations.map((reservation) => ({
+      id: reservation.id,
+      studentName: reservation.studentName,
+      phone: formatPhoneNumber(reservation.phone),
+      school: reservation.school,
+      grade: reservation.grade,
+      className: reservation.className,
+      path: reservation.path,
+      attendeeCount: reservation.attendeeCount,
+      status: reservation.status,
+      attendeeStatus: reservation.attendee?.status ?? null,
+      enteredAt: reservation.attendee?.enteredAt?.toISOString() ?? null,
+      createdAt: reservation.createdAt.toISOString(),
+      cancelledAt: reservation.cancelledAt?.toISOString() ?? null,
     })),
   };
 }
@@ -158,6 +286,7 @@ export async function updateEvent(
   });
   revalidatePath("/dashboard");
   revalidatePath(`/events/${id}`);
+  revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
   return { success: true };
 }
@@ -166,6 +295,7 @@ export async function deleteEvent(id: string): Promise<ActionResult> {
   await requireAdmin();
   await prisma.event.delete({ where: { id } });
   revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
   return { success: true };
 }

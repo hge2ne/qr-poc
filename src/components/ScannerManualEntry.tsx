@@ -3,7 +3,6 @@
 import {
   enterReservedReservationFromScanner,
   enterUnreservedStudentFromScanner,
-  getScannerEntryEvents,
   searchScannerStudentsByPhoneLast4,
 } from "@/actions/scanner";
 import type {
@@ -12,9 +11,10 @@ import type {
   ScannerLookupStudent,
 } from "@/actions/scannerTypes";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type ScannerManualEntryProps = {
+  selectedEvent: ScannerEntryEvent;
   onEntryComplete?: (result: ScannerEntryResult) => void;
 };
 
@@ -34,38 +34,15 @@ function eventLabel(event: { campus: string; round: string | null; location: str
   return [event.campus, event.round, event.location].filter(Boolean).join(" · ");
 }
 
-export function ScannerManualEntry({ onEntryComplete }: ScannerManualEntryProps) {
+export function ScannerManualEntry({ selectedEvent, onEntryComplete }: ScannerManualEntryProps) {
   const [last4, setLast4] = useState("");
   const [students, setStudents] = useState<ScannerLookupStudent[]>([]);
-  const [entryEvents, setEntryEvents] = useState<ScannerEntryEvent[]>([]);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const [eventsLoading, setEventsLoading] = useState(true);
   const [enteringId, setEnteringId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [entryResult, setEntryResult] = useState<ScannerEntryResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
-
-  useEffect(() => {
-    let ignore = false;
-    getScannerEntryEvents()
-      .then((result) => {
-        if (ignore) return;
-        if (result.success && result.data) {
-          setEntryEvents(result.data);
-        }
-      })
-      .catch(() => {
-        if (!ignore) setError("설명회 목록을 불러오지 못했습니다.");
-      })
-      .finally(() => {
-        if (!ignore) setEventsLoading(false);
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
 
   const expandedStudent = useMemo(
     () => students.find((student) => student.key === expandedKey) ?? null,
@@ -120,7 +97,7 @@ export function ScannerManualEntry({ onEntryComplete }: ScannerManualEntryProps)
     setExpandedKey(null);
 
     try {
-      const result = await searchScannerStudentsByPhoneLast4(digits);
+      const result = await searchScannerStudentsByPhoneLast4(digits, selectedEvent.id);
       if (!result.success || !result.data) {
         setError(result.error ?? "학생 조회에 실패했습니다.");
         setStudents([]);
@@ -145,7 +122,7 @@ export function ScannerManualEntry({ onEntryComplete }: ScannerManualEntryProps)
     setEntryResult(null);
 
     try {
-      const result = await enterReservedReservationFromScanner(reservationId);
+      const result = await enterReservedReservationFromScanner(reservationId, selectedEvent.id);
       if (!result.success || !result.data) {
         setError(result.error ?? "입장 처리에 실패했습니다.");
         return;
@@ -413,46 +390,35 @@ export function ScannerManualEntry({ onEntryComplete }: ScannerManualEntryProps)
                       </div>
                     ) : canEnterWithoutReservation ? (
                       <div className="space-y-2">
-                        {eventsLoading && (
-                          <p className="rounded-lg bg-card px-3 py-3 text-center text-sm text-muted-foreground">
-                            설명회 목록 로딩 중
-                          </p>
-                        )}
-                        {!eventsLoading && entryEvents.length === 0 && (
-                          <p className="rounded-lg bg-card px-3 py-3 text-center text-sm text-muted-foreground">
-                            선택 가능한 설명회가 없습니다
-                          </p>
-                        )}
-                        {!eventsLoading &&
-                          entryEvents.map((event) => {
-                            const actionId = `${student.studentId}:${event.id}`;
-                            return (
-                              <button
-                                key={event.id}
-                                type="button"
-                                disabled={enteringId !== null}
-                                onClick={() =>
-                                  handleUnreservedEntry(student.studentId as string, event.id)
-                                }
-                                className="w-full rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-70"
-                              >
-                                <div className="mb-1 flex items-start justify-between gap-2">
-                                  <p className="text-sm font-semibold text-foreground">
-                                    {event.title}
-                                  </p>
-                                  <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
-                                    {enteringId === actionId ? "처리 중" : "현장 입장"}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatEventDate(event.date)}
+                        {[selectedEvent].map((event) => {
+                          const actionId = `${student.studentId}:${event.id}`;
+                          return (
+                            <button
+                              key={event.id}
+                              type="button"
+                              disabled={enteringId !== null}
+                              onClick={() =>
+                                handleUnreservedEntry(student.studentId as string, event.id)
+                              }
+                              className="w-full rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              <div className="mb-1 flex items-start justify-between gap-2">
+                                <p className="text-sm font-semibold text-foreground">
+                                  {event.title}
                                 </p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">
-                                  {eventLabel(event)}
-                                </p>
-                              </button>
-                            );
-                          })}
+                                <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
+                                  {enteringId === actionId ? "처리 중" : "현장 입장"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {formatEventDate(event.date)}
+                              </p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {eventLabel(event)}
+                              </p>
+                            </button>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="rounded-lg bg-card px-3 py-3 text-center text-sm text-muted-foreground">

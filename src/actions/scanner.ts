@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { recordEntryError } from "@/lib/entryLogs";
 import { formatPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
 import type { ActionResult } from "./types";
@@ -90,12 +91,14 @@ function toEntryResult(data: {
 
 function revalidateEntryPaths(eventId: string) {
   revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/scanner");
 }
 
 export async function searchScannerStudentsByPhoneLast4(
-  last4: string
+  last4: string,
+  eventId?: string
 ): Promise<ActionResult<ScannerLookupStudent[]>> {
   await requireAdmin();
 
@@ -103,6 +106,7 @@ export async function searchScannerStudentsByPhoneLast4(
   if (digits.length !== 4) {
     return { success: false, error: "연락처 뒷자리 4자리를 입력해 주세요." };
   }
+  const selectedEventId = cleanText(eventId);
 
   const [students, reservations] = await Promise.all([
     prisma.student.findMany({
@@ -112,7 +116,10 @@ export async function searchScannerStudentsByPhoneLast4(
       },
       include: {
         reservations: {
-          where: { status: "RESERVED" },
+          where: {
+            status: "RESERVED",
+            ...(selectedEventId && { eventId: selectedEventId }),
+          },
           include: {
             event: true,
             attendee: {
@@ -131,6 +138,7 @@ export async function searchScannerStudentsByPhoneLast4(
       where: {
         status: "RESERVED",
         phoneNormalized: { endsWith: digits },
+        ...(selectedEventId && { eventId: selectedEventId }),
       },
       include: {
         event: true,
@@ -228,12 +236,21 @@ export async function getScannerEntryEvents(): Promise<ActionResult<ScannerEntry
 }
 
 export async function enterReservedReservationFromScanner(
-  reservationId: string
+  reservationId: string,
+  expectedEventId?: string
 ): Promise<ActionResult<ScannerEntryResult>> {
   await requireAdmin();
 
+  const selectedEventId = cleanText(expectedEventId);
   const id = cleanText(reservationId);
-  if (!id) return { success: false, error: "예약 정보를 확인할 수 없습니다." };
+  if (!id) {
+    const error = "예약 정보를 확인할 수 없습니다.";
+    if (selectedEventId) {
+      await recordEntryError({ eventId: selectedEventId, source: "MANUAL", message: error });
+      revalidateEntryPaths(selectedEventId);
+    }
+    return { success: false, error };
+  }
 
   return prisma.$transaction(async (tx) => {
     const reservation = await tx.reservation.findUnique({
@@ -242,13 +259,59 @@ export async function enterReservedReservationFromScanner(
     });
 
     if (!reservation) {
-      return { success: false, error: "예약 정보를 찾을 수 없습니다." };
+      const error = "예약 정보를 찾을 수 없습니다.";
+      if (selectedEventId) {
+        await tx.entryLog.create({
+          data: { eventId: selectedEventId, source: "MANUAL", message: error },
+        });
+        revalidateEntryPaths(selectedEventId);
+      }
+      return { success: false, error };
     }
     if (reservation.status === "CANCELLED") {
-      return { success: false, error: "취소된 예약입니다." };
+      const error = "취소된 예약입니다.";
+      await tx.entryLog.create({
+        data: {
+          eventId: selectedEventId || reservation.eventId,
+          reservationId: reservation.id,
+          attendeeId: reservation.attendee?.id ?? null,
+          source: "MANUAL",
+          message: error,
+        },
+      });
+      revalidateEntryPaths(selectedEventId || reservation.eventId);
+      return { success: false, error };
+    }
+    if (selectedEventId && reservation.eventId !== selectedEventId) {
+      const error = `선택한 설명회의 예약이 아닙니다. 이 예약은 ${reservation.event.title} 예약입니다.`;
+      await tx.entryLog.create({
+        data: {
+          eventId: selectedEventId,
+          reservationId: reservation.id,
+          attendeeId: reservation.attendee?.id ?? null,
+          source: "MANUAL",
+          message: error,
+        },
+      });
+      revalidateEntryPaths(selectedEventId);
+      return {
+        success: false,
+        error,
+      };
     }
     if (reservation.attendee?.status === "CANCELLED") {
-      return { success: false, error: "취소된 참석자입니다." };
+      const error = "취소된 참석자입니다.";
+      await tx.entryLog.create({
+        data: {
+          eventId: reservation.eventId,
+          reservationId: reservation.id,
+          attendeeId: reservation.attendee.id,
+          source: "MANUAL",
+          message: error,
+        },
+      });
+      revalidateEntryPaths(reservation.eventId);
+      return { success: false, error };
     }
     if (reservation.attendee?.status === "ENTERED" && reservation.attendee.enteredAt) {
       return {
@@ -310,7 +373,12 @@ export async function enterUnreservedStudentFromScanner(data: {
   const studentId = cleanText(data.studentId);
   const eventId = cleanText(data.eventId);
   if (!studentId || !eventId) {
-    return { success: false, error: "학생과 설명회를 선택해 주세요." };
+    const error = "학생과 설명회를 선택해 주세요.";
+    if (eventId) {
+      await recordEntryError({ eventId, source: "MANUAL", message: error });
+      revalidateEntryPaths(eventId);
+    }
+    return { success: false, error };
   }
 
   return prisma.$transaction(async (tx) => {
@@ -323,9 +391,21 @@ export async function enterUnreservedStudentFromScanner(data: {
       }),
     ]);
 
-    if (!student) return { success: false, error: "학생 정보를 찾을 수 없습니다." };
+    if (!student) {
+      const error = "학생 정보를 찾을 수 없습니다.";
+      await tx.entryLog.create({
+        data: { eventId, source: "MANUAL", message: error },
+      });
+      revalidateEntryPaths(eventId);
+      return { success: false, error };
+    }
     if (!event || event.reservationStatus === "HIDDEN") {
-      return { success: false, error: "입장 가능한 설명회를 찾을 수 없습니다." };
+      const error = "입장 가능한 설명회를 찾을 수 없습니다.";
+      await tx.entryLog.create({
+        data: { eventId, source: "MANUAL", message: error },
+      });
+      revalidateEntryPaths(eventId);
+      return { success: false, error };
     }
 
     const normalizedPhone = normalizePhoneNumber(student.phone);

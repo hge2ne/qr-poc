@@ -34,6 +34,15 @@ enum ReservationStatus {
   CANCELLED
 }
 
+enum EntryLogSource {
+  QR
+  MANUAL
+}
+
+enum EntryLogStatus {
+  ERROR
+}
+
 model User {
   id        String     @id @default(cuid())
   name      String
@@ -60,6 +69,7 @@ model Event {
   updatedAt            DateTime               @default(now()) @updatedAt
   attendees            Attendee[]
   reservations         Reservation[]
+  entryLogs            EntryLog[]
 }
 
 model Attendee {
@@ -82,6 +92,7 @@ model Attendee {
   event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
   reservation   Reservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   user          User?          @relation(fields: [userId], references: [id])
+  entryLogs     EntryLog[]
 }
 
 model Student {
@@ -122,8 +133,29 @@ model Reservation {
   event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
   student         Student?          @relation(fields: [studentId], references: [id], onDelete: SetNull)
   attendee        Attendee?
+  entryLogs       EntryLog[]
 
   @@index([eventId, status])
   @@index([phoneNormalized])
   @@index([studentName, phoneNormalized])
+}
+
+model EntryLog {
+  id            String         @id @default(cuid())
+  eventId       String?
+  attendeeId    String?
+  reservationId String?
+  source        EntryLogSource
+  status        EntryLogStatus @default(ERROR)
+  message       String
+  token         String?
+  createdAt     DateTime       @default(now())
+  event         Event?         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attendee      Attendee?      @relation(fields: [attendeeId], references: [id], onDelete: SetNull)
+  reservation   Reservation?   @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, status])
+  @@index([attendeeId])
+  @@index([reservationId])
+  @@index([createdAt])
 }

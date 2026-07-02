@@ -63,6 +63,7 @@ export async function createAttendee(data: {
   const qrUrl = buildQrUrl(attendee.qrToken);
   revalidatePath(`/events/${data.eventId}`);
   revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
   return { success: true, data: { id: attendee.id, qrToken: attendee.qrToken, qrUrl } };
 }
@@ -137,6 +138,7 @@ export async function updateAttendee(
   });
   revalidatePath(`/events/${attendee.eventId}`);
   revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
   return { success: true };
 }
@@ -146,6 +148,7 @@ export async function deleteAttendee(id: string): Promise<ActionResult> {
   const attendee = await prisma.attendee.delete({ where: { id } });
   revalidatePath(`/events/${attendee.eventId}`);
   revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
   return { success: true };
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { recordEntryError } from "@/lib/entryLogs";
 import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
 import type { ActionResult } from "./types";
@@ -14,6 +15,35 @@ function getBaseUrl(): string {
 
 function buildQrUrl(qrToken: string): string {
   return `${getBaseUrl()}/verify/${qrToken}`;
+}
+
+async function requireAdmin() {
+  const session = await getSession();
+  if (!session || session.role !== "ADMIN") {
+    return { success: false as const, error: "관리자 권한이 필요합니다." };
+  }
+  return { success: true as const };
+}
+
+async function recordQrError(input: {
+  eventId?: string | null;
+  attendeeId?: string | null;
+  reservationId?: string | null;
+  token?: string | null;
+  message: string;
+}) {
+  await recordEntryError({
+    eventId: input.eventId,
+    attendeeId: input.attendeeId,
+    reservationId: input.reservationId,
+    source: "QR",
+    token: input.token,
+    message: input.message,
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
+  if (input.eventId) revalidatePath(`/events/${input.eventId}`);
+  revalidatePath("/scanner");
 }
 
 export async function getQRPass(token: string): Promise<
@@ -58,7 +88,7 @@ export async function getQRPass(token: string): Promise<
   };
 }
 
-export async function verifyQRToken(token: string): Promise<
+export async function verifyQRToken(token: string, expectedEventId?: string): Promise<
   ActionResult<{
     attendeeName: string;
     phone: string;
@@ -67,17 +97,46 @@ export async function verifyQRToken(token: string): Promise<
     alreadyEntered: boolean;
   }>
 > {
+  const auth = await requireAdmin();
+  if (!auth.success) return auth;
+  const selectedEventId = expectedEventId?.trim();
+
   const attendee = await prisma.attendee.findUnique({
     where: { qrToken: token },
     include: { event: true, reservation: true },
   });
 
   if (!attendee) {
-    return { success: false, error: "유효하지 않은 QR 코드입니다." };
+    const error = "유효하지 않은 QR 코드입니다.";
+    await recordQrError({ eventId: selectedEventId, token, message: error });
+    return { success: false, error };
   }
 
   if (attendee.status === "CANCELLED" || attendee.reservation?.status === "CANCELLED") {
-    return { success: false, error: "취소된 예약의 QR 코드입니다." };
+    const error = "취소된 예약의 QR 코드입니다.";
+    await recordQrError({
+      eventId: selectedEventId || attendee.eventId,
+      attendeeId: attendee.id,
+      reservationId: attendee.reservationId,
+      token,
+      message: error,
+    });
+    return { success: false, error };
+  }
+
+  if (selectedEventId && attendee.eventId !== selectedEventId) {
+    const error = `선택한 설명회의 QR이 아닙니다. 이 QR은 ${attendee.event.title} 예약입니다.`;
+    await recordQrError({
+      eventId: selectedEventId,
+      attendeeId: attendee.id,
+      reservationId: attendee.reservationId,
+      token,
+      message: error,
+    });
+    return {
+      success: false,
+      error,
+    };
   }
 
   if (attendee.status === "ENTERED") {
@@ -100,7 +159,9 @@ export async function verifyQRToken(token: string): Promise<
   });
 
   revalidatePath("/dashboard");
+  revalidatePath("/phone-reservations");
   revalidatePath(`/events/${updated.eventId}`);
+  revalidatePath("/scanner");
 
   return {
     success: true,

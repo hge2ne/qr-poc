@@ -20,13 +20,13 @@ export default async function NewAttendeePage({
   return (
     <div className="max-w-lg">
       <div className="mb-6 flex items-center gap-2">
-        <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-muted-foreground">
-          대시보드
+        <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
+          QR 운영
         </Link>
         <span className="text-input">/</span>
         <Link
           href={`/events/${event.id}`}
-          className="text-sm text-muted-foreground hover:text-muted-foreground"
+          className="text-sm text-muted-foreground hover:text-foreground"
         >
           {event.title}
         </Link>

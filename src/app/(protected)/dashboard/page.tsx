@@ -8,34 +8,17 @@ export default async function DashboardPage() {
   if (session?.role !== "ADMIN") redirect("/my-qr");
 
   const events = await getEvents();
-  const totalAttendees = events.reduce((sum, e) => sum + e.totalCount, 0);
-  const totalEntered = events.reduce((sum, e) => sum + e.enteredCount, 0);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-foreground">대시보드</h1>
+        <h1 className="text-2xl font-bold text-foreground">QR 운영</h1>
         <Link
           href="/events/new"
           className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           + 새 설명회 생성
         </Link>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">전체 설명회</p>
-          <p className="text-3xl font-bold text-foreground mt-1">{events.length}</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">전체 예약 인원</p>
-          <p className="text-3xl font-bold text-foreground mt-1">{totalAttendees}</p>
-        </div>
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">입장 완료</p>
-          <p className="text-3xl font-bold text-success mt-1">{totalEntered}</p>
-        </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -50,36 +33,38 @@ export default async function DashboardPage() {
             </Link>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-muted bg-background">
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">설명회명</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">날짜</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">장소</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">예약 / 입장</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-background">
-              {events.map((event) => (
-                <tr key={event.id} className="hover:bg-background transition-colors">
-                  <td className="px-5 py-3.5">
-                    <Link href={`/events/${event.id}`} className="text-primary hover:underline font-medium text-sm">
-                      {event.title}
-                    </Link>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{event.campus}</p>
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-muted-foreground">
-                    {new Date(event.date).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-muted-foreground">{event.location}</td>
-                  <td className="px-5 py-3.5 text-sm text-right">
-                    <span className="text-success font-medium">{event.enteredCount}</span>
-                    <span className="text-muted-foreground"> / {event.totalCount}명</span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px]">
+              <thead>
+                <tr className="border-b border-muted bg-background">
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">설명회명</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">날짜</th>
+                  <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">장소</th>
+                  <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">예약 / 입장</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-background">
+                {events.map((event) => (
+                  <tr key={event.id} className="hover:bg-background transition-colors">
+                    <td className="px-5 py-3.5">
+                      <Link href={`/events/${event.id}`} className="text-primary hover:underline font-medium text-sm">
+                        {event.title}
+                      </Link>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{event.campus}</p>
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground">
+                      {new Date(event.date).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground">{event.location}</td>
+                    <td className="px-5 py-3.5 text-sm text-right">
+                      <span className="text-success font-medium">{event.enteredCount}</span>
+                      <span className="text-muted-foreground"> / {event.totalCount}명</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

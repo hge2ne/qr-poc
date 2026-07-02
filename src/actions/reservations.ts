@@ -358,6 +358,7 @@ export async function createReservation(
     revalidatePath("/reserve/check");
     revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
+    revalidatePath("/phone-reservations");
     revalidatePath(`/events/${eventId}`);
 
     return {
@@ -451,6 +452,7 @@ export async function cancelReservation(data: {
     revalidatePath("/reserve/check");
     revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
+    revalidatePath("/phone-reservations");
     revalidatePath(`/events/${reservation.eventId}`);
 
     return { success: true };
@@ -506,6 +508,7 @@ export async function cancelReservations(data: {
     revalidatePath("/reserve/check");
     for (const reservation of cancellable) revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
+    revalidatePath("/phone-reservations");
     for (const eventId of eventIds) revalidatePath(`/events/${eventId}`);
 
     return { success: true };
@@ -556,6 +559,7 @@ export async function adminCancelReservation(data: {
     revalidatePath("/reserve/check");
     revalidatePath(`/reserve/${reservation.id}`);
     revalidatePath("/dashboard");
+    revalidatePath("/phone-reservations");
     revalidatePath(`/events/${reservation.eventId}`);
 
     return { success: true };
