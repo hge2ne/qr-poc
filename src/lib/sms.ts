@@ -34,6 +34,8 @@ type EntrySmsInput = {
 };
 
 const SMS_EVENT_BRAND = "늘푸른 수학원 설명회";
+const TRUTHY_ENV_VALUES = new Set(["1", "true", "yes", "y", "on"]);
+const FALSY_ENV_VALUES = new Set(["0", "false", "no", "n", "off"]);
 
 type CachedSolapiClient = {
   cacheKey: string;
@@ -42,14 +44,63 @@ type CachedSolapiClient = {
 
 let cachedSolapiClient: CachedSolapiClient | null = null;
 
+function parseOptionalBoolean(value: string | undefined): boolean | null {
+  if (value === undefined) return null;
+  const normalized = value.trim().toLowerCase();
+  if (TRUTHY_ENV_VALUES.has(normalized)) return true;
+  if (FALSY_ENV_VALUES.has(normalized)) return false;
+  return null;
+}
+
+function parseBoolean(value: string | undefined): boolean {
+  return parseOptionalBoolean(value) === true;
+}
+
+function cleanEnvValue(value: string | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  const quote = trimmed[0];
+  if (
+    trimmed.length >= 2 &&
+    (quote === `"` || quote === "'") &&
+    trimmed[trimmed.length - 1] === quote
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function isProductionDeployment(): boolean {
+  return process.env.VERCEL_ENV === "production" || (
+    process.env.NODE_ENV === "production" && !process.env.VERCEL_ENV
+  );
+}
+
+function isSmsEnabled(): boolean {
+  if (parseBoolean(process.env.SMS_DISABLED)) return false;
+
+  const explicitEnabled = parseOptionalBoolean(process.env.SMS_ENABLED);
+  if (explicitEnabled !== null) return explicitEnabled;
+
+  return isProductionDeployment();
+}
+
+function shouldRestrictToTestRecipients(): boolean {
+  const explicitRestriction = parseOptionalBoolean(
+    process.env.SMS_RECIPIENT_ALLOWLIST_ENABLED ?? process.env.SMS_TEST_RECIPIENTS_ENABLED,
+  );
+  if (explicitRestriction !== null) return explicitRestriction;
+
+  return !isProductionDeployment();
+}
+
 function getSolapiConfig(): SolapiConfig | null {
-  if (process.env.SMS_DISABLED === "true" || process.env.SMS_ENABLED !== "true") {
+  if (!isSmsEnabled()) {
     return null;
   }
 
-  const apiKey = process.env.SOLAPI_API_KEY?.trim();
-  const apiSecret = process.env.SOLAPI_API_SECRET?.trim();
-  const sender = toSolapiPhoneNumber(process.env.SOLAPI_SENDER ?? "");
+  const apiKey = cleanEnvValue(process.env.SOLAPI_API_KEY);
+  const apiSecret = cleanEnvValue(process.env.SOLAPI_API_SECRET);
+  const sender = toSolapiPhoneNumber(cleanEnvValue(process.env.SOLAPI_SENDER));
 
   if (!apiKey || !apiSecret || !sender) return null;
 
@@ -78,7 +129,10 @@ function toSolapiPhoneNumber(phone: string): string {
 }
 
 function getTestRecipientSet(): Set<string> | null {
-  const recipients = process.env.SMS_TEST_RECIPIENTS?.split(",")
+  if (!shouldRestrictToTestRecipients()) return null;
+
+  const rawRecipients = process.env.SMS_RECIPIENT_ALLOWLIST ?? process.env.SMS_TEST_RECIPIENTS;
+  const recipients = rawRecipients?.split(",")
     .map((phone) => toSolapiPhoneNumber(phone))
     .filter(Boolean);
 
@@ -88,7 +142,7 @@ function getTestRecipientSet(): Set<string> | null {
 function getBlockedByTestRecipientError(recipient: string): string | null {
   const testRecipients = getTestRecipientSet();
   if (!testRecipients || testRecipients.has(recipient)) return null;
-  return "Recipient is not included in SMS_TEST_RECIPIENTS.";
+  return "Recipient is not included in the SMS recipient allowlist.";
 }
 
 function formatKoreanDateTime(date: Date): string {
@@ -139,6 +193,7 @@ async function sendSms(to: string, body: string): Promise<SmsSendResult> {
       to: recipient,
       from: config.sender,
       text: body,
+      autoTypeDetect: true,
     });
 
     return { status: "sent", messageId: getSolapiMessageId(response) };

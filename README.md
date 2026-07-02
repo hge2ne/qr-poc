@@ -27,13 +27,16 @@ SOLAPI_API_KEY=
 SOLAPI_API_SECRET=
 SOLAPI_SENDER=01012345678
 
-# Optional but recommended for POC/demo. If set, only these recipients receive real SMS.
+# Optional for local/preview POC demos. Production ignores this list unless the
+# allowlist flag below is explicitly enabled.
 SMS_TEST_RECIPIENTS=01012345678,01098765432
+SMS_RECIPIENT_ALLOWLIST_ENABLED=false
 ```
 
-Set `SMS_DISABLED=true` or omit `SMS_ENABLED=true` to skip sending in local or staging
-environments. SOLAPI requires pre-registering `SOLAPI_SENDER` as a sender number in the
-SOLAPI console before real delivery works.
+Set `SMS_DISABLED=true` to force-disable sending. In production deployments, SMS sends when
+SOLAPI credentials are configured unless `SMS_ENABLED=false` or `SMS_DISABLED=true` is set.
+SOLAPI requires pre-registering `SOLAPI_SENDER` as a sender number in the SOLAPI console
+before real delivery works.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
