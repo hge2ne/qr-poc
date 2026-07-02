@@ -15,7 +15,7 @@ type TorchCapability = {
 };
 
 const CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: "environment",
+  facingMode: "user",
 };
 
 const CAMERA_QUALITY_CONSTRAINTS: MediaTrackConstraints = {
