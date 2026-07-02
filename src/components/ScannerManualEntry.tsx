@@ -328,7 +328,7 @@ export function ScannerManualEntry({ selectedEvent, onEntryComplete }: ScannerMa
                       className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                         hasReservations
                           ? "bg-success/15 text-success"
-                          : "bg-muted text-muted-foreground"
+                          : "bg-warning/20 text-warning-foreground"
                       }`}
                     >
                       {hasReservations ? "예약" : "미예약"}
@@ -407,7 +407,7 @@ export function ScannerManualEntry({ selectedEvent, onEntryComplete }: ScannerMa
                                   {event.title}
                                 </p>
                                 <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-white">
-                                  {enteringId === actionId ? "처리 중" : "현장 입장"}
+                                  {enteringId === actionId ? "처리 중" : "미예약 입장"}
                                 </span>
                               </div>
                               <p className="text-xs text-muted-foreground">

@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { LogoutButton } from "./LogoutButton";
 
 const NAV_ITEMS = [
-  { label: "명단", disabled: true },
+  { label: "명단", href: "/students", prefixes: ["/students"] },
   { label: "전화예약/취소", href: "/phone-reservations", prefixes: ["/phone-reservations"] },
   { label: "문자", disabled: true },
   { label: "QR 운영", href: "/dashboard", prefixes: ["/dashboard", "/events"] },
