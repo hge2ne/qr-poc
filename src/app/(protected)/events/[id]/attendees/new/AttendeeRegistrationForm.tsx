@@ -2,7 +2,7 @@
 
 import { createAttendee } from "@/actions/attendees";
 import { lookupStudentByParentPhone } from "@/actions/reservations";
-import type { ReservationStudent } from "@/actions/reservationTypes";
+import type { ReservationStudent, SmsDeliveryStatus } from "@/actions/reservationTypes";
 import { QRCodeDisplay } from "@/components/QRCodeDisplay";
 import { GRADE_OPTIONS } from "@/lib/grades";
 import { formatPhoneNumber } from "@/lib/phone";
@@ -15,6 +15,7 @@ type CreatedResult = {
   id: string;
   qrToken: string;
   qrUrl: string;
+  smsStatus?: SmsDeliveryStatus;
   name: string;
 };
 
@@ -66,6 +67,12 @@ export function AttendeeRegistrationForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<CreatedResult | null>(null);
+
+  function getSmsNotice(status?: SmsDeliveryStatus) {
+    if (status === "sent") return "입장 QR 안내 문자를 학부모 연락처로 발송했습니다.";
+    if (status === "failed") return "문자 발송을 완료하지 못했습니다. QR 코드를 직접 전달해 주세요.";
+    return "문자 발송 설정이 완료되면 학부모 연락처로 입장 QR 안내가 발송됩니다.";
+  }
 
   function selectPath(nextPath: RegistrationPath) {
     setRegistrationPath(nextPath);
@@ -145,7 +152,7 @@ export function AttendeeRegistrationForm({
           <span className="text-xl text-success">✓</span>
         </div>
         <h2 className="mb-1 text-lg font-bold text-foreground">{created.name} 님 등록 완료</h2>
-        <p className="mb-6 text-sm text-muted-foreground">QR 코드를 다운로드하여 학부모에게 전달하세요</p>
+        <p className="mb-6 text-sm text-muted-foreground">{getSmsNotice(created.smsStatus)}</p>
         <QRCodeDisplay value={created.qrUrl} size={220} downloadName={`${created.name}_QR`} />
         <div className="mt-6 flex gap-2">
           <button

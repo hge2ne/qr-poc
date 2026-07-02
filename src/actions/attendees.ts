@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { formatPhoneNumber } from "@/lib/phone";
 import { getSession } from "@/lib/session";
+import { sendReservationSuccessSms } from "@/lib/sms";
+import type { SmsDeliveryStatus } from "./reservationTypes";
 import type { ActionResult } from "./types";
 
 async function requireAdmin() {
@@ -21,6 +23,23 @@ function buildQrUrl(qrToken: string): string {
   return `${baseUrl.replace(/\/$/, "")}/verify/${qrToken}`;
 }
 
+function formatEventDateText(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  const eventDate = `${get("year")}-${get("month")}-${get("day")}`;
+  const eventTime = `${get("hour")}:${get("minute")}`.replace(/^24:/, "00:");
+  return `${eventDate} ${eventTime}`;
+}
+
 export async function createAttendee(data: {
   eventId: string;
   name: string;
@@ -31,7 +50,7 @@ export async function createAttendee(data: {
   grade?: string;
   className?: string;
   attendeeCount?: number;
-}): Promise<ActionResult<{ id: string; qrToken: string; qrUrl: string }>> {
+}): Promise<ActionResult<{ id: string; qrToken: string; qrUrl: string; smsStatus?: SmsDeliveryStatus }>> {
   await requireAdmin();
   const attendeeCount =
     Number.isInteger(data.attendeeCount) && data.attendeeCount! > 0 ? data.attendeeCount! : 1;
@@ -65,12 +84,26 @@ export async function createAttendee(data: {
       qrToken,
       qrUrl,
     },
+    include: { event: true },
   });
   revalidatePath(`/events/${data.eventId}`);
   revalidatePath("/dashboard");
   revalidatePath("/phone-reservations");
   revalidatePath("/reserve");
-  return { success: true, data: { id: attendee.id, qrToken: attendee.qrToken, qrUrl } };
+
+  const sms = await sendReservationSuccessSms({
+    to: attendee.phone,
+    studentName: attendee.name,
+    eventTitle: attendee.event.title,
+    eventDateText: formatEventDateText(attendee.event.date),
+    location: attendee.event.location,
+    qrUrl,
+  });
+
+  return {
+    success: true,
+    data: { id: attendee.id, qrToken: attendee.qrToken, qrUrl, smsStatus: sms.status },
+  };
 }
 
 export async function getAttendees(eventId: string) {
