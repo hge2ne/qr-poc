@@ -5,6 +5,7 @@ import type { Html5Qrcode, Html5QrcodeCameraScanConfig } from "html5-qrcode";
 
 type Props = {
   onScan: (decodedText: string) => void;
+  preferRearCamera?: boolean;
 };
 
 type ScannerStatus = "loading" | "active" | "error";
@@ -14,8 +15,12 @@ type TorchCapability = {
   value: () => boolean | null;
 };
 
-const CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
+const FRONT_CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
   facingMode: "user",
+};
+
+const REAR_CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { exact: "environment" },
 };
 
 const CAMERA_QUALITY_CONSTRAINTS: MediaTrackConstraints = {
@@ -30,7 +35,7 @@ const FRONT_CAMERA_TARGET_ZOOM = 2;
 const isTouchDevice =
   typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
 
-async function tuneCameraForScanning(scanner: Html5Qrcode) {
+async function tuneCameraForScanning(scanner: Html5Qrcode, shouldApplyTouchZoom: boolean) {
   // 연속 초점을 지원하는 기기에서는 오토포커스를 켭니다.
   try {
     const capabilities = scanner.getRunningTrackCapabilities() as MediaTrackCapabilities & {
@@ -45,7 +50,7 @@ async function tuneCameraForScanning(scanner: Html5Qrcode) {
     // 초점 제어를 지원하지 않는 브라우저는 무시합니다.
   }
 
-  if (!isTouchDevice) return;
+  if (!isTouchDevice || !shouldApplyTouchZoom) return;
 
   // 고정 초점 전면 카메라에서 QR 확대를 위해 줌을 적용합니다.
   try {
@@ -85,21 +90,23 @@ async function stopScanner(scanner: Html5Qrcode) {
   }
 }
 
-function getCameraErrorMessage(error: unknown) {
+function getCameraErrorMessage(error: unknown, preferRearCamera: boolean) {
+  const cameraLabel = preferRearCamera ? "후면" : "전면";
+
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
       return "카메라 권한을 허용한 뒤 다시 요청해 주세요.";
     }
 
     if (error.name === "NotFoundError" || error.name === "OverconstrainedError") {
-      return "전면 카메라를 찾을 수 없습니다.";
+      return `${cameraLabel} 카메라를 찾을 수 없습니다.`;
     }
   }
 
-  return "카메라 권한 또는 전면 카메라 상태를 확인해 주세요.";
+  return `카메라 권한 또는 ${cameraLabel} 카메라 상태를 확인해 주세요.`;
 }
 
-export function QRScanner({ onScan }: Props) {
+export function QRScanner({ onScan, preferRearCamera = false }: Props) {
   const generatedId = useId();
   const previewId = `qr-preview-${generatedId.replaceAll(":", "")}`;
   const onScanRef = useRef(onScan);
@@ -136,8 +143,12 @@ export function QRScanner({ onScan }: Props) {
         });
         scannerRef.current = scanner;
 
+        const cameraStartConstraints = preferRearCamera
+          ? REAR_CAMERA_START_CONSTRAINTS
+          : FRONT_CAMERA_START_CONSTRAINTS;
+
         await scanner.start(
-          CAMERA_START_CONSTRAINTS,
+          cameraStartConstraints,
           SCAN_CONFIG,
           (text) => onScanRef.current(text),
           () => {}
@@ -155,7 +166,7 @@ export function QRScanner({ onScan }: Props) {
           // Keep the scanner running with the browser-selected camera settings.
         }
 
-        await tuneCameraForScanning(scanner);
+        await tuneCameraForScanning(scanner, !preferRearCamera);
 
         try {
           const torchCapability = scanner
@@ -182,7 +193,7 @@ export function QRScanner({ onScan }: Props) {
           if (scanner) await stopScanner(scanner);
 
           setStatus("error");
-          setErrorMsg(getCameraErrorMessage(error));
+          setErrorMsg(getCameraErrorMessage(error, preferRearCamera));
         }
       }
     }
@@ -198,7 +209,7 @@ export function QRScanner({ onScan }: Props) {
       setTorchOn(false);
       if (scanner) void stopScanner(scanner);
     };
-  }, [previewId, startAttempt]);
+  }, [preferRearCamera, previewId, startAttempt]);
 
   const handleToggleTorch = useCallback(async () => {
     const torchCapability = torchCapabilityRef.current;
@@ -226,7 +237,9 @@ export function QRScanner({ onScan }: Props) {
       {/* html5-qrcode 가 여기에 video 엘리먼트를 주입합니다 */}
       <div
         id={previewId}
-        className="w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover [&_video]:-scale-x-100"
+        className={`w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover ${
+          preferRearCamera ? "" : "[&_video]:-scale-x-100"
+        }`}
       />
 
       {/* 로딩 오버레이 */}
