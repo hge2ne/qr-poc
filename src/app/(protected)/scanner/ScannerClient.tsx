@@ -41,6 +41,10 @@ function detectDevice(): string {
   return "PC";
 }
 
+function shouldPreferRearCamera(deviceType: string): boolean {
+  return deviceType === "iPhone" || deviceType.startsWith("Android");
+}
+
 function getStoredGateNumber(): number | null {
   if (typeof window === "undefined") return null;
 
@@ -240,6 +244,7 @@ export function ScannerClient({ initialEvents, initialEventsError }: ScannerClie
     [initialEvents, storedEventId]
   );
   const selectedEventId = selectedEvent?.id ?? "";
+  const preferRearCamera = shouldPreferRearCamera(deviceType);
 
   const selectGate = (num: number) => {
     localStorage.setItem(SCANNER_DEVICE_STORAGE_KEY, String(num));
@@ -390,7 +395,7 @@ export function ScannerClient({ initialEvents, initialEventsError }: ScannerClie
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(320px,420px)_1fr] gap-5 items-start">
           <div className="flex flex-col gap-3">
-            <QRScanner onScan={handleScan} preferRearCamera={deviceType === "iPhone"} />
+            <QRScanner onScan={handleScan} preferRearCamera={preferRearCamera} />
             <ScanResultPanel processing={processing} result={result} />
           </div>
 
