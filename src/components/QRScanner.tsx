@@ -233,13 +233,18 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
   }, []);
 
   return (
-    <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
-      {/* html5-qrcode 가 여기에 video 엘리먼트를 주입합니다 */}
+    <div
+      className={`relative bg-black rounded-xl overflow-hidden ${
+        status === "active" ? "" : "min-h-[280px]"
+      }`}
+    >
+      {/* html5-qrcode 가 여기에 video 엘리먼트를 주입합니다.
+          video 표시 크기를 CSS 로 강제하면(w-full/h-full/object-cover) 라이브러리가
+          표시/원본 비율을 축별로 곱해 만드는 디코드 캔버스가 비등방 압축되어
+          iOS(zxing 폴백)에서 QR 인식이 깨집니다. 원본 비율 그대로 둡니다. */}
       <div
         id={previewId}
-        className={`w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover ${
-          preferRearCamera ? "" : "[&_video]:-scale-x-100"
-        }`}
+        className={preferRearCamera ? "" : "[&_video]:-scale-x-100"}
       />
 
       {/* 로딩 오버레이 */}
@@ -271,7 +276,7 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div
             className="relative aspect-square"
-            style={{ width: "min(78%, 340px)" }}
+            style={{ height: "min(74%, 320px)" }}
           >
             {/* 코너 마커 */}
             <span className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-primary rounded-tl-md" />
