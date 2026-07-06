@@ -69,7 +69,10 @@ async function tuneCameraForScanning(scanner: Html5Qrcode, shouldApplyTouchZoom:
 function buildScanConfig(preferRearCamera: boolean): Html5QrcodeCameraScanConfig {
   return {
     fps: 20,
-    disableFlip: false,
+    // 카메라 스트림은 미러되어 들어오지 않으므로(전면 프리뷰 미러는 CSS 표시 전용)
+    // 반전 프레임 재디코드는 낭비입니다. 끄면 프레임당 디코드가 1회로 줄어
+    // iOS zxing 폴백의 실효 스캔 횟수가 2배가 됩니다.
+    disableFlip: true,
     videoConstraints: buildVideoConstraints(preferRearCamera),
     qrbox: (viewfinderWidth, viewfinderHeight) => {
       const shortestEdge = Math.min(viewfinderWidth, viewfinderHeight);
