@@ -15,19 +15,19 @@ type TorchCapability = {
   value: () => boolean | null;
 };
 
-const FRONT_CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: "user",
-};
-
-const REAR_CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { exact: "environment" },
-};
-
-const CAMERA_QUALITY_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 1920 },
-  height: { ideal: 1080 },
-  frameRate: { ideal: 30, max: 30 },
-};
+// 카메라 방향과 해상도를 스캔 시작 시점에 한 번에 요청합니다.
+// - 시작 후 applyConstraints 로 해상도를 바꾸면 iOS Safari 가 스트림을 16:9 로
+//   재협상해 디코드 품질이 나빠지는 부작용이 있었습니다.
+// - 1440×1080(4:3)은 대부분 카메라 센서의 네이티브 비율이라 수용률이 높고,
+//   같은 폭에서 16:9 보다 스캔 영역이 넓어 iOS 의 zxing 폴백 디코더에 유리합니다.
+function buildVideoConstraints(preferRearCamera: boolean): MediaTrackConstraints {
+  return {
+    facingMode: preferRearCamera ? { exact: "environment" } : "user",
+    width: { ideal: 1440 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30 },
+  };
+}
 
 // iPad/태블릿 전면 카메라는 고정 초점 광각이라 QR 이 작고 흐리게 잡힙니다.
 // 터치 기기에서만 살짝 확대해 디코더가 읽을 픽셀을 확보합니다. (Mac 은 정상이라 제외)
@@ -66,18 +66,21 @@ async function tuneCameraForScanning(scanner: Html5Qrcode, shouldApplyTouchZoom:
   }
 }
 
-const SCAN_CONFIG: Html5QrcodeCameraScanConfig = {
-  fps: 20,
-  disableFlip: false,
-  qrbox: (viewfinderWidth, viewfinderHeight) => {
-    const shortestEdge = Math.min(viewfinderWidth, viewfinderHeight);
-    const maxSize = Math.max(120, shortestEdge - 24);
-    const preferredSize = Math.max(220, Math.floor(shortestEdge * 0.78));
-    const size = Math.min(maxSize, preferredSize);
+function buildScanConfig(preferRearCamera: boolean): Html5QrcodeCameraScanConfig {
+  return {
+    fps: 20,
+    disableFlip: false,
+    videoConstraints: buildVideoConstraints(preferRearCamera),
+    qrbox: (viewfinderWidth, viewfinderHeight) => {
+      const shortestEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      const maxSize = Math.max(120, shortestEdge - 24);
+      const preferredSize = Math.max(220, Math.floor(shortestEdge * 0.78));
+      const size = Math.min(maxSize, preferredSize);
 
-    return { width: size, height: size };
-  },
-};
+      return { width: size, height: size };
+    },
+  };
+}
 
 async function stopScanner(scanner: Html5Qrcode) {
   try {
@@ -143,13 +146,11 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
         });
         scannerRef.current = scanner;
 
-        const cameraStartConstraints = preferRearCamera
-          ? REAR_CAMERA_START_CONSTRAINTS
-          : FRONT_CAMERA_START_CONSTRAINTS;
-
         await scanner.start(
-          cameraStartConstraints,
-          SCAN_CONFIG,
+          // config.videoConstraints 가 유효하면 라이브러리는 getUserMedia 에
+          // 그 값을 사용하고 이 인자는 무시합니다. (폴백 겸 형식상 필수 인자)
+          { facingMode: preferRearCamera ? { exact: "environment" } : "user" },
+          buildScanConfig(preferRearCamera),
           (text) => onScanRef.current(text),
           () => {}
         );
@@ -157,13 +158,6 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
         if (cancelled) {
           await stopScanner(scanner);
           return;
-        }
-
-        try {
-          await scanner.applyVideoConstraints(CAMERA_QUALITY_CONSTRAINTS);
-        } catch {
-          // Some Android WebViews reject quality upgrades after permission.
-          // Keep the scanner running with the browser-selected camera settings.
         }
 
         await tuneCameraForScanning(scanner, !preferRearCamera);
