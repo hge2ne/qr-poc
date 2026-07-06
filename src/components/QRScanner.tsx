@@ -124,6 +124,13 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
   const [torchOn, setTorchOn] = useState(false);
   const [torchChanging, setTorchChanging] = useState(false);
   const [startAttempt, setStartAttempt] = useState(0);
+  // ?scanDebug=1 로 접속하면 기기 현장 검증용 진단 정보를 표시합니다.
+  const [debugEnabled] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("scanDebug")
+  );
+  const [debugInfo, setDebugInfo] = useState("");
 
   useEffect(() => {
     onScanRef.current = onScan;
@@ -207,6 +214,34 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
       if (scanner) void stopScanner(scanner);
     };
   }, [preferRearCamera, previewId, startAttempt]);
+
+  useEffect(() => {
+    if (!debugEnabled || status !== "active") return;
+
+    const timer = setInterval(() => {
+      const video = document.getElementById(previewId)?.querySelector("video");
+      if (!video) return;
+
+      let trackInfo = "";
+      try {
+        const settings = scannerRef.current?.getRunningTrackSettings();
+        if (settings) {
+          const fps = settings.frameRate ? Math.round(settings.frameRate) : "?";
+          trackInfo = ` | track ${settings.width ?? "?"}x${settings.height ?? "?"}@${fps}fps`;
+        }
+      } catch {
+        // 스캐너 전환 중에는 트랙 정보를 읽을 수 없습니다.
+      }
+
+      const decoder = "BarcodeDetector" in window ? "native+zxing" : "zxing";
+      setDebugInfo(
+        `${decoder} | video ${video.videoWidth}x${video.videoHeight}` +
+          ` | view ${video.clientWidth}x${video.clientHeight}${trackInfo}`
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [debugEnabled, status, previewId]);
 
   const handleToggleTorch = useCallback(async () => {
     const torchCapability = torchCapabilityRef.current;
@@ -295,6 +330,12 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
         >
           {torchOn ? "조명 끄기" : "조명 켜기"}
         </button>
+      )}
+
+      {debugEnabled && status === "active" && debugInfo && (
+        <p className="absolute left-2 top-2 rounded bg-black/70 px-2 py-1 font-mono text-[10px] text-lime-300">
+          {debugInfo}
+        </p>
       )}
 
       {/* 하단 안내 텍스트 */}
