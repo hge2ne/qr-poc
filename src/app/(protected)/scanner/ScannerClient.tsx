@@ -41,9 +41,9 @@ function detectDevice(): string {
   return "PC";
 }
 
-function shouldPreferRearCamera(deviceType: string): boolean {
-  return deviceType === "iPhone" || deviceType.startsWith("Android");
-}
+// 손에 들고 스캔하는 모바일 기기는 후면 카메라를 사용합니다.
+// iPad 는 거치형(참석자를 향한 전면 스캔) 용도, Mac/PC 는 웹캠(전면)만 있습니다.
+const REAR_CAMERA_DEVICE_TYPES = new Set(["iPhone", "Android 폰", "Android 태블릿"]);
 
 function getStoredGateNumber(): number | null {
   if (typeof window === "undefined") return null;
@@ -244,7 +244,6 @@ export function ScannerClient({ initialEvents, initialEventsError }: ScannerClie
     [initialEvents, storedEventId]
   );
   const selectedEventId = selectedEvent?.id ?? "";
-  const preferRearCamera = shouldPreferRearCamera(deviceType);
 
   const selectGate = (num: number) => {
     localStorage.setItem(SCANNER_DEVICE_STORAGE_KEY, String(num));
@@ -395,7 +394,10 @@ export function ScannerClient({ initialEvents, initialEventsError }: ScannerClie
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(320px,420px)_1fr] gap-5 items-start">
           <div className="flex flex-col gap-3">
-            <QRScanner onScan={handleScan} preferRearCamera={preferRearCamera} />
+            <QRScanner
+              onScan={handleScan}
+              preferRearCamera={REAR_CAMERA_DEVICE_TYPES.has(deviceType)}
+            />
             <ScanResultPanel processing={processing} result={result} />
           </div>
 

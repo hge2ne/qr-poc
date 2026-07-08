@@ -15,256 +15,69 @@ type TorchCapability = {
   value: () => boolean | null;
 };
 
-type RangeCameraCapability = {
-  isSupported: () => boolean;
-  apply: (value: number) => Promise<void>;
-  value: () => number | null;
-  min: () => number;
-  max: () => number;
-  step: () => number;
-};
-
-type FocusTrackCapabilities = MediaTrackCapabilities & {
-  focusMode?: string[];
-  exposureMode?: string[];
-  pointsOfInterest?: Array<{ x: number; y: number }>;
-  whiteBalanceMode?: string[];
-};
-
-type CameraTuningConstraint = "exposureMode" | "focusMode" | "whiteBalanceMode";
-
-const CAMERA_QUALITY_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 1920 },
-  height: { ideal: 1080 },
-  frameRate: { ideal: 30, max: 30 },
-};
-
-const FRONT_CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: "user",
-};
-
-const REAR_CAMERA_START_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { exact: "environment" },
-};
-
-const REAR_CAMERA_FALLBACK_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: "environment",
-};
+// 카메라 방향과 해상도를 스캔 시작 시점에 한 번에 요청합니다.
+// - 시작 후 applyConstraints 로 해상도를 바꾸면 iOS Safari 가 스트림을 16:9 로
+//   재협상해 디코드 품질이 나빠지는 부작용이 있었습니다.
+// - 1440×1080(4:3)은 대부분 카메라 센서의 네이티브 비율이라 수용률이 높고,
+//   같은 폭에서 16:9 보다 스캔 영역이 넓어 iOS 의 zxing 폴백 디코더에 유리합니다.
+function buildVideoConstraints(preferRearCamera: boolean): MediaTrackConstraints {
+  return {
+    facingMode: preferRearCamera ? { exact: "environment" } : "user",
+    width: { ideal: 1440 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30 },
+  };
+}
 
 // iPad/태블릿 전면 카메라는 고정 초점 광각이라 QR 이 작고 흐리게 잡힙니다.
 // 터치 기기에서만 살짝 확대해 디코더가 읽을 픽셀을 확보합니다. (Mac 은 정상이라 제외)
 const FRONT_CAMERA_TARGET_ZOOM = 2;
-const REAR_CAMERA_TARGET_ZOOM = 1.6;
-const REAR_CAMERA_FOCUS_SETTLE_MS = 180;
-const ZOOM_NUDGE_SETTLE_MS = 120;
-const ZOOM_EPSILON = 0.01;
 const isTouchDevice =
   typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-function getZoomCapability(scanner: Html5Qrcode): RangeCameraCapability | null {
+async function tuneCameraForScanning(scanner: Html5Qrcode, shouldApplyTouchZoom: boolean) {
+  // 연속 초점을 지원하는 기기에서는 오토포커스를 켭니다.
   try {
-    const zoom = scanner.getRunningTrackCameraCapabilities().zoomFeature() as RangeCameraCapability;
-    return zoom.isSupported() ? zoom : null;
+    const capabilities = scanner.getRunningTrackCapabilities() as MediaTrackCapabilities & {
+      focusMode?: string[];
+    };
+    if (capabilities.focusMode?.includes("continuous")) {
+      await scanner.applyVideoConstraints({
+        advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet],
+      });
+    }
   } catch {
-    return null;
+    // 초점 제어를 지원하지 않는 브라우저는 무시합니다.
   }
-}
 
-async function applyCameraTuningConstraint(
-  scanner: Html5Qrcode,
-  capabilities: FocusTrackCapabilities,
-  constraint: CameraTuningConstraint,
-  value: string,
-) {
-  if (!capabilities[constraint]?.includes(value)) return false;
+  if (!isTouchDevice || !shouldApplyTouchZoom) return;
 
+  // 고정 초점 전면 카메라에서 QR 확대를 위해 줌을 적용합니다.
   try {
-    await scanner.applyVideoConstraints({
-      advanced: [{ [constraint]: value } as MediaTrackConstraintSet],
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function applyFocusMode(scanner: Html5Qrcode, focusMode: string) {
-  try {
-    await scanner.applyVideoConstraints({
-      advanced: [{ focusMode } as MediaTrackConstraintSet],
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function applyCenterPointOfInterest(scanner: Html5Qrcode) {
-  try {
-    await scanner.applyVideoConstraints({
-      advanced: [
-        { pointsOfInterest: [{ x: 0.5, y: 0.5 }] } as MediaTrackConstraintSet,
-      ],
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function applyContinuousCameraTuning(scanner: Html5Qrcode) {
-  try {
-    const capabilities = scanner.getRunningTrackCapabilities() as FocusTrackCapabilities;
-    let applied = false;
-
-    applied =
-      (await applyCameraTuningConstraint(scanner, capabilities, "focusMode", "continuous")) ||
-      applied;
-    applied =
-      (await applyCameraTuningConstraint(scanner, capabilities, "exposureMode", "continuous")) ||
-      applied;
-    applied =
-      (await applyCameraTuningConstraint(
-        scanner,
-        capabilities,
-        "whiteBalanceMode",
-        "continuous",
-      )) || applied;
-    applied = (await applyCenterPointOfInterest(scanner)) || applied;
-
-    return applied;
-  } catch {
-    return false;
-  }
-}
-
-async function applyCameraZoom(scanner: Html5Qrcode, targetZoom: number) {
-  const zoom = getZoomCapability(scanner);
-  if (!zoom) return false;
-
-  const target = clamp(targetZoom, zoom.min(), zoom.max());
-  if (target <= (zoom.value() ?? 1) + ZOOM_EPSILON) return false;
-
-  await zoom.apply(target);
-  return true;
-}
-
-async function nudgeCameraZoom(scanner: Html5Qrcode, targetZoom: number) {
-  const zoom = getZoomCapability(scanner);
-  if (!zoom) return false;
-
-  const min = zoom.min();
-  const max = zoom.max();
-  const current = clamp(zoom.value() ?? 1, min, max);
-  const target = clamp(Math.max(targetZoom, current), min, max);
-
-  if (Math.abs(target - current) > ZOOM_EPSILON) {
-    await zoom.apply(target);
-    return true;
-  }
-
-  const step = Math.max(zoom.step() || 0.1, 0.1);
-  const bumped =
-    current + step <= max
-      ? current + step
-      : current - step >= min
-        ? current - step
-        : current;
-
-  if (Math.abs(bumped - current) <= ZOOM_EPSILON) return false;
-
-  await zoom.apply(bumped);
-  await wait(ZOOM_NUDGE_SETTLE_MS);
-  await zoom.apply(current);
-  return true;
-}
-
-async function tuneCameraForScanning(
-  scanner: Html5Qrcode,
-  zoomTarget: number | null,
-  shouldSettleAfterZoom: boolean,
-) {
-  await applyContinuousCameraTuning(scanner);
-
-  if (!isTouchDevice || zoomTarget === null) return;
-
-  // 모바일 카메라에서 QR 확대를 위해 줌을 적용합니다.
-  try {
-    const zoomApplied = await applyCameraZoom(scanner, zoomTarget);
-    if (zoomApplied && shouldSettleAfterZoom) {
-      await wait(REAR_CAMERA_FOCUS_SETTLE_MS);
-      await applyContinuousCameraTuning(scanner);
+    const zoom = scanner.getRunningTrackCameraCapabilities().zoomFeature();
+    if (zoom.isSupported()) {
+      const target = Math.min(FRONT_CAMERA_TARGET_ZOOM, zoom.max());
+      if (target > (zoom.value() ?? 1)) {
+        await zoom.apply(target);
+      }
     }
   } catch {
     // 줌 미지원 기기는 기본 배율로 계속 진행합니다.
   }
 }
 
-function isCameraSelectionError(error: unknown) {
-  return (
-    error instanceof DOMException &&
-    (error.name === "NotFoundError" || error.name === "OverconstrainedError")
-  );
-}
-
-async function startScannerWithConstraints(
-  scanner: Html5Qrcode,
-  constraints: MediaTrackConstraints,
-  scanConfig: Html5QrcodeCameraScanConfig,
-  onScan: (decodedText: string) => void,
-) {
-  await scanner.start(constraints, scanConfig, onScan, () => {});
-}
-
-async function requestCameraRefocus(scanner: Html5Qrcode, zoomTarget: number | null) {
-  let applied = await applyContinuousCameraTuning(scanner);
-
-  try {
-    const capabilities = scanner.getRunningTrackCapabilities() as FocusTrackCapabilities;
-    const focusModes = capabilities.focusMode ?? [];
-
-    if (focusModes.includes("single-shot")) {
-      applied = (await applyFocusMode(scanner, "single-shot")) || applied;
-    }
-
-    if (focusModes.includes("continuous")) {
-      applied = (await applyFocusMode(scanner, "continuous")) || applied;
-    }
-  } catch {
-    // Focus controls are not available on every mobile browser.
-  }
-
-  if (zoomTarget !== null) {
-    try {
-      applied = (await nudgeCameraZoom(scanner, zoomTarget)) || applied;
-      await wait(REAR_CAMERA_FOCUS_SETTLE_MS);
-      applied = (await applyContinuousCameraTuning(scanner)) || applied;
-    } catch {
-      // Zoom nudge is best-effort only.
-    }
-  }
-
-  return applied;
-}
-
-function createScanConfig(preferRearCamera: boolean): Html5QrcodeCameraScanConfig {
+function buildScanConfig(preferRearCamera: boolean): Html5QrcodeCameraScanConfig {
   return {
-    fps: preferRearCamera && isTouchDevice ? 15 : 20,
-    disableFlip: preferRearCamera,
+    fps: 20,
+    // 카메라 스트림은 미러되어 들어오지 않으므로(전면 프리뷰 미러는 CSS 표시 전용)
+    // 반전 프레임 재디코드는 낭비입니다. 끄면 프레임당 디코드가 1회로 줄어
+    // iOS zxing 폴백의 실효 스캔 횟수가 2배가 됩니다.
+    disableFlip: true,
+    videoConstraints: buildVideoConstraints(preferRearCamera),
     qrbox: (viewfinderWidth, viewfinderHeight) => {
       const shortestEdge = Math.min(viewfinderWidth, viewfinderHeight);
-      const maxSize = Math.max(120, shortestEdge - 20);
-      const preferredSize = Math.max(220, Math.floor(shortestEdge * 0.82));
+      const maxSize = Math.max(120, shortestEdge - 24);
+      const preferredSize = Math.max(220, Math.floor(shortestEdge * 0.78));
       const size = Math.min(maxSize, preferredSize);
 
       return { width: size, height: size };
@@ -310,39 +123,28 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [torchChanging, setTorchChanging] = useState(false);
-  const [refocusing, setRefocusing] = useState(false);
-  const [refocusMessage, setRefocusMessage] = useState("");
   const [startAttempt, setStartAttempt] = useState(0);
-  const refocusMessageTimerRef = useRef<number | null>(null);
+  // ?scanDebug=1 로 접속하면 기기 현장 검증용 진단 정보를 표시합니다.
+  const [debugEnabled] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("scanDebug")
+  );
+  const [debugInfo, setDebugInfo] = useState("");
 
   useEffect(() => {
     onScanRef.current = onScan;
   }, [onScan]);
 
-  const showRefocusMessage = useCallback((message: string) => {
-    setRefocusMessage(message);
-
-    if (refocusMessageTimerRef.current !== null) {
-      window.clearTimeout(refocusMessageTimerRef.current);
-    }
-
-    refocusMessageTimerRef.current = window.setTimeout(() => {
-      setRefocusMessage("");
-      refocusMessageTimerRef.current = null;
-    }, 1800);
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
-    async function runScanner() {
+    async function startScanner() {
       try {
         setStatus("loading");
         setErrorMsg("");
         setTorchSupported(false);
         setTorchOn(false);
-        setRefocusing(false);
-        setRefocusMessage("");
 
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
         if (cancelled) return;
@@ -354,45 +156,21 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
         });
         scannerRef.current = scanner;
 
-        const cameraStartConstraints = preferRearCamera
-          ? REAR_CAMERA_START_CONSTRAINTS
-          : FRONT_CAMERA_START_CONSTRAINTS;
-        const scanConfig = createScanConfig(preferRearCamera);
-
-        try {
-          await startScannerWithConstraints(
-            scanner,
-            cameraStartConstraints,
-            scanConfig,
-            (text) => onScanRef.current(text),
-          );
-        } catch (error) {
-          if (!preferRearCamera || !isCameraSelectionError(error)) throw error;
-
-          await startScannerWithConstraints(
-            scanner,
-            REAR_CAMERA_FALLBACK_CONSTRAINTS,
-            scanConfig,
-            (text) => onScanRef.current(text),
-          );
-        }
+        await scanner.start(
+          // config.videoConstraints 가 유효하면 라이브러리는 getUserMedia 에
+          // 그 값을 사용하고 이 인자는 무시합니다. (폴백 겸 형식상 필수 인자)
+          { facingMode: preferRearCamera ? { exact: "environment" } : "user" },
+          buildScanConfig(preferRearCamera),
+          (text) => onScanRef.current(text),
+          () => {}
+        );
 
         if (cancelled) {
           await stopScanner(scanner);
           return;
         }
 
-        try {
-          await scanner.applyVideoConstraints(CAMERA_QUALITY_CONSTRAINTS);
-        } catch {
-          // Some Android WebViews reject quality upgrades after permission.
-          // Keep the scanner running with the browser-selected camera settings.
-        }
-
-        const zoomTarget = preferRearCamera
-          ? REAR_CAMERA_TARGET_ZOOM
-          : FRONT_CAMERA_TARGET_ZOOM;
-        await tuneCameraForScanning(scanner, zoomTarget, preferRearCamera);
+        await tuneCameraForScanning(scanner, !preferRearCamera);
 
         try {
           const torchCapability = scanner
@@ -416,7 +194,6 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
           torchCapabilityRef.current = null;
           setTorchSupported(false);
           setTorchOn(false);
-          setRefocusing(false);
           if (scanner) await stopScanner(scanner);
 
           setStatus("error");
@@ -425,7 +202,7 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
       }
     }
 
-    runScanner();
+    startScanner();
 
     return () => {
       cancelled = true;
@@ -434,14 +211,37 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
       torchCapabilityRef.current = null;
       setTorchSupported(false);
       setTorchOn(false);
-      setRefocusing(false);
-      if (refocusMessageTimerRef.current !== null) {
-        window.clearTimeout(refocusMessageTimerRef.current);
-        refocusMessageTimerRef.current = null;
-      }
       if (scanner) void stopScanner(scanner);
     };
   }, [preferRearCamera, previewId, startAttempt]);
+
+  useEffect(() => {
+    if (!debugEnabled || status !== "active") return;
+
+    const timer = setInterval(() => {
+      const video = document.getElementById(previewId)?.querySelector("video");
+      if (!video) return;
+
+      let trackInfo = "";
+      try {
+        const settings = scannerRef.current?.getRunningTrackSettings();
+        if (settings) {
+          const fps = settings.frameRate ? Math.round(settings.frameRate) : "?";
+          trackInfo = ` | track ${settings.width ?? "?"}x${settings.height ?? "?"}@${fps}fps`;
+        }
+      } catch {
+        // 스캐너 전환 중에는 트랙 정보를 읽을 수 없습니다.
+      }
+
+      const decoder = "BarcodeDetector" in window ? "native+zxing" : "zxing";
+      setDebugInfo(
+        `${decoder} | video ${video.videoWidth}x${video.videoHeight}` +
+          ` | view ${video.clientWidth}x${video.clientHeight}${trackInfo}`
+      );
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [debugEnabled, status, previewId]);
 
   const handleToggleTorch = useCallback(async () => {
     const torchCapability = torchCapabilityRef.current;
@@ -460,40 +260,23 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
     }
   }, [torchChanging, torchOn]);
 
-  const handleRefocusCamera = useCallback(async () => {
-    const scanner = scannerRef.current;
-    if (!scanner || refocusing) return;
-
-    setRefocusing(true);
-    try {
-      const applied = await requestCameraRefocus(
-        scanner,
-        preferRearCamera ? REAR_CAMERA_TARGET_ZOOM : FRONT_CAMERA_TARGET_ZOOM,
-      );
-      showRefocusMessage(
-        applied
-          ? "초점을 다시 맞췄습니다."
-          : "이 브라우저는 수동 초점을 지원하지 않습니다.",
-      );
-    } catch {
-      showRefocusMessage("초점 재조정에 실패했습니다.");
-    } finally {
-      setRefocusing(false);
-    }
-  }, [preferRearCamera, refocusing, showRefocusMessage]);
-
   const handleRetryCamera = useCallback(() => {
     setStartAttempt((attempt) => attempt + 1);
   }, []);
 
   return (
-    <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
-      {/* html5-qrcode 가 여기에 video 엘리먼트를 주입합니다 */}
+    <div
+      className={`relative bg-black rounded-xl overflow-hidden ${
+        status === "active" ? "" : "min-h-[280px]"
+      }`}
+    >
+      {/* html5-qrcode 가 여기에 video 엘리먼트를 주입합니다.
+          video 표시 크기를 CSS 로 강제하면(w-full/h-full/object-cover) 라이브러리가
+          표시/원본 비율을 축별로 곱해 만드는 디코드 캔버스가 비등방 압축되어
+          iOS(zxing 폴백)에서 QR 인식이 깨집니다. 원본 비율 그대로 둡니다. */}
       <div
         id={previewId}
-        className={`w-full h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover ${
-          preferRearCamera ? "" : "[&_video]:-scale-x-100"
-        }`}
+        className={preferRearCamera ? "" : "[&_video]:-scale-x-100"}
       />
 
       {/* 로딩 오버레이 */}
@@ -525,7 +308,7 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div
             className="relative aspect-square"
-            style={{ width: "min(82%, 360px)" }}
+            style={{ height: "min(74%, 320px)" }}
           >
             {/* 코너 마커 */}
             <span className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-primary rounded-tl-md" />
@@ -536,18 +319,6 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
             <span className="absolute left-2 right-2 h-px bg-primary/80 shadow-[0_0_6px_2px_rgba(96,165,250,0.5)] animate-[scanline_2s_ease-in-out_infinite]" />
           </div>
         </div>
-      )}
-
-      {status === "active" && preferRearCamera && (
-        <button
-          type="button"
-          onClick={handleRefocusCamera}
-          disabled={refocusing}
-          aria-label="후면 카메라 초점 재조정"
-          className="absolute left-3 top-3 rounded-lg bg-black/65 px-3 py-1.5 text-xs font-medium text-white shadow-sm backdrop-blur transition-colors hover:bg-black/80 disabled:opacity-50"
-        >
-          {refocusing ? "초점 조정 중" : "초점 맞추기"}
-        </button>
       )}
 
       {status === "active" && torchSupported && (
@@ -561,12 +332,9 @@ export function QRScanner({ onScan, preferRearCamera = false }: Props) {
         </button>
       )}
 
-      {status === "active" && refocusMessage && (
-        <p
-          className="absolute left-3 top-14 max-w-[calc(100%-1.5rem)] rounded-md bg-black/65 px-3 py-1.5 text-xs text-white/85 shadow-sm backdrop-blur"
-          aria-live="polite"
-        >
-          {refocusMessage}
+      {debugEnabled && status === "active" && debugInfo && (
+        <p className="absolute left-2 top-2 rounded bg-black/70 px-2 py-1 font-mono text-[10px] text-lime-300">
+          {debugInfo}
         </p>
       )}
 
